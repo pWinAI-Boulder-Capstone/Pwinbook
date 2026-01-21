@@ -15,8 +15,7 @@ services:
     build: .
     ports:
       - "8502:8502"
-    expose:
-      - "5055"
+      - "5055:5055"
     env_file:
       - ./docker.env
     depends_on:
