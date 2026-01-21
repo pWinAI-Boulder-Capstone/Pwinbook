@@ -29,8 +29,8 @@ services:
     image: nginx:alpine
     depends_on:
       - open_notebook
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: always
