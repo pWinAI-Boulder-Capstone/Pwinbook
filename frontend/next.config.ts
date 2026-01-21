@@ -2,7 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Enable standalone output for optimized Docker deployment
-  // output: "standalone",
+  output: "standalone",
+
+   experimental: {
+    // Prevents Next from trying to over-trace/copy some app router client reference files
+    outputFileTracingRoot: __dirname,
+  },
 
   // API Rewrites: Proxy /api/* requests to FastAPI backend
   // This simplifies reverse proxy configuration - users only need to proxy to port 8502
