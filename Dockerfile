@@ -34,9 +34,17 @@ RUN uv sync --frozen --no-dev
 COPY . /app
 
 # Install frontend dependencies and build
+# Install frontend dependencies and build
 WORKDIR /app/frontend
+
+# (1) Make Next builds stable on small VPS + print the real error in Coolify logs
+ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# (2) Show versions + run verbose build so Coolify shows the actual failure reason
+RUN node -v && npm -v
 RUN npm ci
-RUN npm run build
+RUN npm run build --loglevel verbose
 
 # Return to app root
 WORKDIR /app
