@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { getConfig } from '@/lib/config'
@@ -19,6 +19,15 @@ export function LoginForm() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [configInfo, setConfigInfo] = useState<{ apiUrl: string; version: string; buildTime: string } | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // If middleware redirected here, persist the original target so we can return after login.
+  useEffect(() => {
+    const nextParam = searchParams.get('next')
+    if (nextParam) {
+      sessionStorage.setItem('redirectAfterLogin', nextParam)
+    }
+  }, [searchParams])
 
   // Load config info for debugging
   useEffect(() => {

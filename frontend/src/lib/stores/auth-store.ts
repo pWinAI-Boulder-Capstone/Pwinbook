@@ -77,10 +77,9 @@ export const useAuthStore = create<AuthState>()(
       login: async (username: string, password: string) => {
         set({ isLoading: true, error: null })
         try {
-          const apiUrl = await getApiUrl()
-
-          // Call login endpoint with username and password
-          const response = await fetch(`${apiUrl}/api/auth/login`, {
+          // Call Next.js site-auth endpoint (server-side sets httpOnly cookie)
+          // This avoids relying on localStorage-only auth for site-wide gating.
+          const response = await fetch(`/site-auth/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -88,7 +87,8 @@ export const useAuthStore = create<AuthState>()(
             body: JSON.stringify({
               username: username.trim(),
               password: password
-            })
+            }),
+            cache: 'no-store',
           })
           
           if (response.ok) {
@@ -146,6 +146,13 @@ export const useAuthStore = create<AuthState>()(
       },
       
       logout: () => {
+        // Best-effort: clear the site-wide auth cookie (middleware gate)
+        // Don't block logout if request fails.
+        try {
+          fetch('/site-auth/logout', { method: 'POST' })
+        } catch {
+          // ignore
+        }
         set({ 
           isAuthenticated: false, 
           token: null, 
