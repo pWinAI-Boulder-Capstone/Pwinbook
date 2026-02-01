@@ -13,6 +13,8 @@ from .text_utils import (
     remove_non_printable,
     split_text,
 )
+
+from .web_search import tavily_search
 from .token_utils import token_cost, token_count
 from .version_utils import (
     compare_versions,
@@ -30,5 +32,6 @@ __all__ = [
     "token_cost",
     "compare_versions",
     "get_installed_version",
-    "get_version_from_github"
+    "get_version_from_github",
+    "tavily_search",
 ]

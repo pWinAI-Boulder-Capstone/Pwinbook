@@ -30,6 +30,7 @@ import {
   Book,
   Search,
   Mic,
+  Users,
   Bot,
   Shuffle,
   Settings,
@@ -59,6 +60,7 @@ const navigation = [
     title: 'Create',
     items: [
       { name: 'Podcasts', href: '/podcasts', icon: Mic },
+      { name: 'Podcast Studio', href: '/podcast-studio', icon: Users },
     ],
   },
   {
