@@ -28,6 +28,7 @@ export default function NotebookPage() {
   const { data: notebook, isLoading: notebookLoading } = useNotebook(notebookId)
   const { data: sources, isLoading: sourcesLoading, refetch: refetchSources } = useSources(notebookId)
   const { data: notes, isLoading: notesLoading } = useNotes(notebookId)
+  const [autoOpenNoteId, setAutoOpenNoteId] = useState<string | null>(null)
 
   // Context selection state
   const [contextSelections, setContextSelections] = useState<ContextSelections>({
@@ -102,7 +103,10 @@ export default function NotebookPage() {
     <AppShell>
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex-shrink-0 p-6 pb-0">
-          <NotebookHeader notebook={notebook} />
+          <NotebookHeader
+            notebook={notebook}
+            onQuickSummaryCreated={(noteId) => setAutoOpenNoteId(noteId)}
+          />
         </div>
 
         <div className="flex-1 p-6 pt-6 overflow-hidden">
@@ -126,6 +130,8 @@ export default function NotebookPage() {
                   notebookId={notebookId}
                   contextSelections={contextSelections.notes}
                   onContextModeChange={(noteId, mode) => handleContextModeChange(noteId, mode, 'note')}
+                  autoOpenNoteId={autoOpenNoteId ?? undefined}
+                  onAutoOpenHandled={() => setAutoOpenNoteId(null)}
                 />
               </div>
             </div>

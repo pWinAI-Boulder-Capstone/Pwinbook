@@ -2,7 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { notebooksApi } from '@/lib/api/notebooks'
 import { QUERY_KEYS } from '@/lib/api/query-client'
 import { useToast } from '@/lib/hooks/use-toast'
-import { CreateNotebookRequest, UpdateNotebookRequest } from '@/lib/types/api'
+import {
+  CreateNotebookRequest,
+  UpdateNotebookRequest,
+  NotebookQuickSummaryRequest,
+  NotebookQuickSummaryResponse
+} from '@/lib/types/api'
 
 export function useNotebooks(archived?: boolean) {
   return useQuery({
@@ -84,6 +89,30 @@ export function useDeleteNotebook() {
       toast({
         title: 'Error',
         description: 'Failed to delete notebook',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+export function useQuickSummary() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: NotebookQuickSummaryRequest }) =>
+      notebooksApi.quickSummary(id, data),
+    onSuccess: (result: NotebookQuickSummaryResponse, { id }) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notes(id) })
+      toast({
+        title: 'Summary created',
+        description: 'A new summary note was added to the notebook.',
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate quick summary',
         variant: 'destructive',
       })
     },

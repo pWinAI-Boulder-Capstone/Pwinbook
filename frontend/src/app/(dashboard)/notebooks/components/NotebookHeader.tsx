@@ -4,21 +4,23 @@ import { useState } from 'react'
 import { NotebookResponse } from '@/lib/types/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Archive, ArchiveRestore, Trash2 } from 'lucide-react'
-import { useUpdateNotebook, useDeleteNotebook } from '@/lib/hooks/use-notebooks'
+import { Archive, ArchiveRestore, Sparkles, Trash2 } from 'lucide-react'
+import { useQuickSummary, useUpdateNotebook, useDeleteNotebook } from '@/lib/hooks/use-notebooks'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { formatDistanceToNow } from 'date-fns'
 import { InlineEdit } from '@/components/common/InlineEdit'
 
 interface NotebookHeaderProps {
   notebook: NotebookResponse
+  onQuickSummaryCreated?: (noteId: string) => void
 }
 
-export function NotebookHeader({ notebook }: NotebookHeaderProps) {
+export function NotebookHeader({ notebook, onQuickSummaryCreated }: NotebookHeaderProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   
   const updateNotebook = useUpdateNotebook()
   const deleteNotebook = useDeleteNotebook()
+  const quickSummary = useQuickSummary()
 
   const handleUpdateName = async (name: string) => {
     if (!name || name === notebook.name) return
@@ -50,6 +52,20 @@ export function NotebookHeader({ notebook }: NotebookHeaderProps) {
     setShowDeleteDialog(false)
   }
 
+  const handleQuickSummary = async () => {
+    const result = await quickSummary.mutateAsync({
+      id: notebook.id,
+      data: {
+        title: `Quick Summary - ${notebook.name}`,
+        include_notes: true,
+        include_insights: true,
+      }
+    })
+    if (result?.note?.id) {
+      onQuickSummaryCreated?.(result.note.id)
+    }
+  }
+
   return (
     <>
       <div className="border-b pb-6">
@@ -68,6 +84,15 @@ export function NotebookHeader({ notebook }: NotebookHeaderProps) {
               )}
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleQuickSummary}
+                disabled={quickSummary.isPending}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {quickSummary.isPending ? 'Summarizing…' : 'Quick Summary'}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

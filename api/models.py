@@ -191,6 +191,27 @@ class NoteResponse(BaseModel):
     updated: str
 
 
+# Notebook quick summary API models
+class NotebookQuickSummaryRequest(BaseModel):
+    title: Optional[str] = Field(None, description="Optional title for the summary note")
+    include_notes: bool = Field(True, description="Include notes in the summary context")
+    include_insights: bool = Field(True, description="Include source insights in the summary context")
+    max_tokens: Optional[int] = Field(
+        None, description="Optional max token limit for context assembly"
+    )
+    model_override: Optional[str] = Field(
+        None, description="Optional model override for this summary"
+    )
+
+
+class NotebookQuickSummaryResponse(BaseModel):
+    note: NoteResponse = Field(..., description="Created AI summary note")
+    summary: str = Field(..., description="Summary content")
+    context_meta: Dict[str, Any] = Field(
+        ..., description="Metadata about context used for summary"
+    )
+
+
 # Embedding API models
 class EmbedRequest(BaseModel):
     item_id: str = Field(..., description="ID of the item to embed")

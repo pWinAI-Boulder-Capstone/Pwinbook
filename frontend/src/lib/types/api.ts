@@ -71,6 +71,20 @@ export interface UpdateNotebookRequest {
   archived?: boolean
 }
 
+export interface NotebookQuickSummaryRequest {
+  title?: string
+  include_notes?: boolean
+  include_insights?: boolean
+  max_tokens?: number
+  model_override?: string
+}
+
+export interface NotebookQuickSummaryResponse {
+  note: NoteResponse
+  summary: string
+  context_meta: Record<string, unknown>
+}
+
 export interface CreateNoteRequest {
   title?: string
   content: string

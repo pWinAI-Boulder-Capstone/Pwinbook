@@ -1,12 +1,24 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
-from api.models import NotebookCreate, NotebookResponse, NotebookUpdate
+from ai_prompter import Prompter
+
+from api.models import (
+    NotebookCreate,
+    NotebookQuickSummaryRequest,
+    NotebookQuickSummaryResponse,
+    NotebookResponse,
+    NotebookUpdate,
+    NoteResponse,
+)
 from open_notebook.database.repository import ensure_record_id, repo_query
-from open_notebook.domain.notebook import Notebook, Source
+from open_notebook.domain.notebook import Note, Notebook, Source
 from open_notebook.exceptions import InvalidInputError
+from open_notebook.graphs.utils import provision_langchain_model
+from open_notebook.utils import clean_thinking_content
+from open_notebook.utils.context_builder import ContextConfig, build_notebook_context
 
 router = APIRouter()
 
@@ -115,6 +127,132 @@ async def get_notebook(notebook_id: str):
         logger.error(f"Error fetching notebook {notebook_id}: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Error fetching notebook: {str(e)}"
+        )
+
+
+@router.post(
+    "/notebooks/{notebook_id}/quick-summary",
+    response_model=NotebookQuickSummaryResponse,
+)
+async def quick_summary(notebook_id: str, request: NotebookQuickSummaryRequest):
+    """Generate a quick summary for a notebook and save it as an AI note."""
+    try:
+        full_notebook_id = (
+            notebook_id if notebook_id.startswith("notebook:") else f"notebook:{notebook_id}"
+        )
+        notebook = await Notebook.get(full_notebook_id)
+        if not notebook:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+
+        sources = await notebook.get_sources()
+        source_count = len(sources)
+        if source_count <= 4:
+            summary_max_tokens = 1200
+            summary_mode = "standard length"
+        elif source_count <= 10:
+            summary_max_tokens = 2400
+            summary_mode = "longer summary (more sources)"
+        else:
+            summary_max_tokens = 3600
+            summary_mode = "detailed summary (many sources)"
+
+        # If max_tokens is not provided, do not truncate context so all sources are included.
+        context_max_tokens = request.max_tokens
+        context_config = ContextConfig(
+            include_notes=bool(request.include_notes),
+            include_insights=bool(request.include_insights),
+            max_tokens=context_max_tokens,
+        )
+        # Prefer full source content for summaries to avoid "metadata-only" outputs.
+        if sources:
+            context_config.sources = {
+                source.id: "full content"
+                for source in sources
+                if source.id
+            }
+        # Avoid self-referential summaries by default: only include human notes.
+        if request.include_notes:
+            notes = await notebook.get_notes()
+            context_config.notes = {
+                note.id: "full content"
+                for note in notes
+                if note.id and note.note_type != "ai"
+            }
+        else:
+            context_config.notes = {}
+
+        context = await build_notebook_context(
+            notebook_id=full_notebook_id,
+            context_config=context_config,
+            max_tokens=context_max_tokens,
+        )
+
+        prompt_data: Dict[str, Any] = {
+            "notebook": {
+                "id": notebook.id,
+                "name": notebook.name,
+                "description": notebook.description,
+            },
+            "context": context,
+            "summary_mode": summary_mode,
+        }
+        system_prompt = Prompter(prompt_template="notebook_summary").render(
+            data=prompt_data
+        )
+
+        model = await provision_langchain_model(
+            system_prompt,
+            request.model_override,
+            "transformation",
+            max_tokens=summary_max_tokens,
+        )
+        ai_message = await model.ainvoke(system_prompt)
+        raw_content = (
+            ai_message.content
+            if isinstance(ai_message.content, str)
+            else str(ai_message.content)
+        )
+        summary_content = clean_thinking_content(raw_content)
+        if not summary_content or not summary_content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Summary model returned empty content. Check your model configuration.",
+            )
+
+        note_title = request.title or f"Quick Summary - {notebook.name}"
+        note = Note(title=note_title, content=summary_content, note_type="ai")
+        await note.save()
+        await note.add_to_notebook(full_notebook_id)
+
+        context_meta = context.get("metadata", {})
+        context_meta["total_tokens"] = context.get("total_tokens", 0)
+        context_meta["total_items"] = context.get("total_items", 0)
+        context_meta["source_count"] = source_count
+        context_meta["summary_mode"] = summary_mode
+        context_meta["summary_max_tokens"] = summary_max_tokens
+        context_meta["context_max_tokens"] = context_max_tokens
+
+        return NotebookQuickSummaryResponse(
+            note=NoteResponse(
+                id=note.id or "",
+                title=note.title,
+                content=note.content,
+                note_type=note.note_type,
+                created=str(note.created),
+                updated=str(note.updated),
+            ),
+            summary=summary_content,
+            context_meta=context_meta,
+        )
+    except HTTPException:
+        raise
+    except InvalidInputError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating quick summary for notebook {notebook_id}: {e}")
+        logger.exception(e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate summary: {str(e)}"
         )
 
 

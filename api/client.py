@@ -99,6 +99,30 @@ class APIClient:
         """Delete a notebook."""
         return self._make_request("DELETE", f"/api/notebooks/{notebook_id}")
 
+    def quick_summary(
+        self,
+        notebook_id: str,
+        title: Optional[str] = None,
+        include_notes: bool = True,
+        include_insights: bool = True,
+        max_tokens: Optional[int] = None,
+        model_override: Optional[str] = None,
+    ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Generate a quick summary for a notebook and save it as a note."""
+        data: Dict[str, Any] = {
+            "include_notes": include_notes,
+            "include_insights": include_insights,
+        }
+        if title is not None:
+            data["title"] = title
+        if max_tokens is not None:
+            data["max_tokens"] = max_tokens
+        if model_override is not None:
+            data["model_override"] = model_override
+        return self._make_request(
+            "POST", f"/api/notebooks/{notebook_id}/quick-summary", json=data
+        )
+
     # Search API methods
     def search(
         self,

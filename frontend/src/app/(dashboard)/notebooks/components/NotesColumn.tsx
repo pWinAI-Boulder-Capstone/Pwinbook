@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NoteResponse } from '@/lib/types/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,6 +27,8 @@ interface NotesColumnProps {
   notebookId: string
   contextSelections?: Record<string, ContextMode>
   onContextModeChange?: (noteId: string, mode: ContextMode) => void
+  autoOpenNoteId?: string
+  onAutoOpenHandled?: () => void
 }
 
 export function NotesColumn({
@@ -34,7 +36,9 @@ export function NotesColumn({
   isLoading,
   notebookId,
   contextSelections,
-  onContextModeChange
+  onContextModeChange,
+  autoOpenNoteId,
+  onAutoOpenHandled
 }: NotesColumnProps) {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteResponse | null>(null)
@@ -42,6 +46,15 @@ export function NotesColumn({
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null)
 
   const deleteNote = useDeleteNote()
+
+  useEffect(() => {
+    if (!autoOpenNoteId || !notes || notes.length === 0) return
+    const noteToOpen = notes.find((note) => note.id === autoOpenNoteId)
+    if (!noteToOpen) return
+    setEditingNote(noteToOpen)
+    setShowAddDialog(false)
+    onAutoOpenHandled?.()
+  }, [autoOpenNoteId, notes, onAutoOpenHandled])
 
   const handleDeleteClick = (noteId: string) => {
     setNoteToDelete(noteId)

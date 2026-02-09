@@ -11,6 +11,7 @@ import { useCreateNote, useUpdateNote, useNote } from '@/lib/hooks/use-notes'
 import { QUERY_KEYS } from '@/lib/api/query-client'
 import { MarkdownEditor } from '@/components/ui/markdown-editor'
 import { InlineEdit } from '@/components/common/InlineEdit'
+import { exportSummaryPdf } from '@/lib/pdf/summary-pdf'
 
 const createNoteSchema = z.object({
   title: z.string().optional(),
@@ -23,7 +24,7 @@ interface NoteEditorDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   notebookId: string
-  note?: { id: string; title: string | null; content: string | null }
+  note?: { id: string; title: string | null; content: string | null; note_type?: string | null }
 }
 
 export function NoteEditorDialog({ open, onOpenChange, notebookId, note }: NoteEditorDialogProps) {
@@ -53,6 +54,8 @@ export function NoteEditorDialog({ open, onOpenChange, notebookId, note }: NoteE
     },
   })
   const watchTitle = useWatch({ control, name: 'title' })
+  const watchContent = useWatch({ control, name: 'content' })
+  const canExportPdf = Boolean(note && watchContent && watchContent.trim())
 
   useEffect(() => {
     if (!open) {
@@ -152,6 +155,20 @@ export function NoteEditorDialog({ open, onOpenChange, notebookId, note }: NoteE
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
+            {canExportPdf && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  exportSummaryPdf(
+                    watchTitle?.trim() || 'Summary',
+                    watchContent ?? ''
+                  )
+                }
+              >
+                Export as PDF
+              </Button>
+            )}
             <Button 
               type="submit" 
               disabled={isSaving || (isEditing && noteLoading)}

@@ -1,5 +1,11 @@
 import apiClient from './client'
-import { NotebookResponse, CreateNotebookRequest, UpdateNotebookRequest } from '@/lib/types/api'
+import {
+  NotebookResponse,
+  CreateNotebookRequest,
+  UpdateNotebookRequest,
+  NotebookQuickSummaryRequest,
+  NotebookQuickSummaryResponse
+} from '@/lib/types/api'
 
 export const notebooksApi = {
   list: async (params?: { archived?: boolean; order_by?: string }) => {
@@ -24,6 +30,14 @@ export const notebooksApi = {
 
   delete: async (id: string) => {
     await apiClient.delete(`/notebooks/${id}`)
+  },
+
+  quickSummary: async (id: string, data: NotebookQuickSummaryRequest) => {
+    const response = await apiClient.post<NotebookQuickSummaryResponse>(
+      `/notebooks/${id}/quick-summary`,
+      data
+    )
+    return response.data
   },
 
   addSource: async (notebookId: string, sourceId: string) => {
