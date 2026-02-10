@@ -23,3 +23,13 @@ class ContentSettings(RecordModel):
         ["en", "pt", "es", "de", "nl", "en-GB", "fr", "de", "hi", "ja"],
         description="Preferred languages for YouTube transcripts",
     )
+    smol_docling_enabled: bool = Field(
+        False, description="Enable Smol Docling Integration (Preview)"
+    )
+    document_parser: Optional[Literal["content_core", "smol_docling"]] = Field(
+        "content_core",
+        description="Document parser to use: content_core (default) or smol_docling (VLM-based)"
+    )
+    smol_docling_use_gpu: bool = Field(
+        True, description="Use GPU acceleration for SmolDocling (if available)"
+    )

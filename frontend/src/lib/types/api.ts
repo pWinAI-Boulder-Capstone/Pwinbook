@@ -58,6 +58,9 @@ export interface SettingsResponse {
   default_embedding_option?: string
   auto_delete_files?: string
   youtube_preferred_languages?: string[]
+  smol_docling_enabled?: boolean
+  document_parser?: string
+  smol_docling_use_gpu?: boolean
 }
 
 export interface CreateNotebookRequest {

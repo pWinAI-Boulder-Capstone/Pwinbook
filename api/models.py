@@ -278,6 +278,9 @@ class SettingsResponse(BaseModel):
     default_embedding_option: Optional[str] = None
     auto_delete_files: Optional[str] = None
     youtube_preferred_languages: Optional[List[str]] = None
+    smol_docling_enabled: Optional[bool] = None
+    document_parser: Optional[str] = None
+    smol_docling_use_gpu: Optional[bool] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -286,6 +289,9 @@ class SettingsUpdate(BaseModel):
     default_embedding_option: Optional[str] = None
     auto_delete_files: Optional[str] = None
     youtube_preferred_languages: Optional[List[str]] = None
+    smol_docling_enabled: Optional[bool] = None
+    document_parser: Optional[str] = None
+    smol_docling_use_gpu: Optional[bool] = None
 
 
 # Sources API models
