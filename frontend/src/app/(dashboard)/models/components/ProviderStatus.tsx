@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,24 +11,21 @@ interface ProviderStatusProps {
   providers: ProviderAvailability
 }
 
+const VISIBLE_PROVIDERS = ['openai', 'openrouter', 'elevenlabs']
+
 export function ProviderStatus({ providers }: ProviderStatusProps) {
-  // Combine all providers, with available ones first
+  // Only show OpenAI, OpenRouter, and ElevenLabs
   const allProviders = useMemo(
     () => [
-      ...providers.available.map((p) => ({ name: p, available: true })),
-      ...providers.unavailable.map((p) => ({ name: p, available: false })),
+      ...providers.available
+        .filter((p) => VISIBLE_PROVIDERS.includes(p))
+        .map((p) => ({ name: p, available: true })),
+      ...providers.unavailable
+        .filter((p) => VISIBLE_PROVIDERS.includes(p))
+        .map((p) => ({ name: p, available: false })),
     ],
     [providers.available, providers.unavailable],
   )
-
-  const [expanded, setExpanded] = useState(false)
-
-  const visibleProviders = useMemo(() => {
-    if (expanded) {
-      return allProviders
-    }
-    return allProviders.slice(0, 6)
-  }, [allProviders, expanded])
 
   return (
     <Card>
@@ -43,7 +40,7 @@ export function ProviderStatus({ providers }: ProviderStatusProps) {
       </CardHeader>
       <CardContent>
         <div className="grid gap-2 sm:grid-cols-2">
-          {visibleProviders.map((provider) => {
+          {allProviders.map((provider) => {
             const supportedTypes = providers.supported_types[provider.name] ?? []
 
             return (
@@ -97,28 +94,7 @@ export function ProviderStatus({ providers }: ProviderStatusProps) {
           })}
         </div>
 
-        {allProviders.length > 6 ? (
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setExpanded((prev) => !prev)}
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              {expanded ? 'See less' : `See all ${allProviders.length} providers`}
-            </button>
-          </div>
-        ) : null}
 
-        <div className="mt-6 pt-4 border-t">
-          <a
-            href="https://github.com/lfnovo/open-notebook/blob/main/docs/features/ai-models.md"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary hover:underline"
-          >
-            Learn how to configure providers →
-          </a>
-        </div>
       </CardContent>
     </Card>
   )

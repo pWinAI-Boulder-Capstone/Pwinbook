@@ -28,7 +28,6 @@ import { GeneratePodcastDialog } from '@/components/podcasts/GeneratePodcastDial
 import { Separator } from '@/components/ui/separator'
 import {
   Book,
-  Search,
   Mic,
   Users,
   Bot,
@@ -39,7 +38,6 @@ import {
   Menu,
   FileText,
   Plus,
-  Wrench,
 } from 'lucide-react'
 
 const navigation = [
@@ -53,7 +51,6 @@ const navigation = [
     title: 'Process',
     items: [
       { name: 'Notebooks', href: '/notebooks', icon: Book },
-      { name: 'Ask and Search', href: '/search', icon: Search },
     ],
   },
   {
@@ -69,7 +66,6 @@ const navigation = [
       { name: 'Models', href: '/models', icon: Bot },
       { name: 'Transformations', href: '/transformations', icon: Shuffle },
       { name: 'Settings', href: '/settings', icon: Settings },
-      { name: 'Advanced', href: '/advanced', icon: Wrench },
     ],
   },
 ] as const
