@@ -112,7 +112,7 @@ export function AppSidebar() {
             <div className="relative flex items-center justify-center w-full">
               <Image
                 src="/pwin_logo.jpeg"
-                alt="Winbook"
+                alt="pWinbook"
                 width={32}
                 height={32}
                 className="transition-opacity group-hover:opacity-0"
@@ -129,9 +129,9 @@ export function AppSidebar() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <Image src="/pwin_logo.jpeg" alt="Winbook" width={32} height={32} />
+                <Image src="/pwin_logo.jpeg" alt="pWinbook" width={32} height={32} />
                 <span className="text-base font-medium text-sidebar-foreground">
-                  Winbook
+                  pWinbook
                 </span>
               </div>
               <Button
