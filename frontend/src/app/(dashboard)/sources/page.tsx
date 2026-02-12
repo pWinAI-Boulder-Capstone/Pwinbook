@@ -269,11 +269,19 @@ export default function SourcesPage() {
   if (sources.length === 0) {
     return (
       <AppShell>
-        <EmptyState
-          icon={FileText}
-          title="No sources yet"
-          description="Sources from all notebooks will appear here"
-        />
+        <div className="flex flex-col h-full w-full max-w-none px-6 py-6">
+          <div className="mb-4">
+            <h1 className="text-xl font-semibold">Sources</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              All sources across your notebooks
+            </p>
+          </div>
+          <EmptyState
+            icon={FileText}
+            title="No sources yet"
+            description="Add a source to a notebook — upload a PDF, paste a URL, or write text. It will show up here."
+          />
+        </div>
       </AppShell>
     )
   }
@@ -281,11 +289,18 @@ export default function SourcesPage() {
   return (
     <AppShell>
       <div className="flex flex-col h-full w-full max-w-none px-6 py-4">
-        <div className="mb-4 flex-shrink-0">
-          <h1 className="text-xl font-semibold">Sources</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            All sources across your notebooks
-          </p>
+        <div className="mb-4 flex-shrink-0 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">Sources</h1>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {sources.length}{hasMoreRef.current ? '+' : ''}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              All sources across your notebooks
+            </p>
+          </div>
         </div>
 
         <div ref={scrollContainerRef} className="flex-1 rounded-md border overflow-auto">

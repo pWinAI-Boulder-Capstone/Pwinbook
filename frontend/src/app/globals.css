@@ -123,6 +123,16 @@
     @apply bg-background text-foreground transition-colors;
   }
   
+  /* Smooth content appearance */
+  main {
+    animation: fadeIn 0.15s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
   /* Ensure proper theme inheritance for popovers and dropdowns */
   .dark {
     color-scheme: dark;
@@ -152,18 +162,17 @@
   
   /* Enhanced hover effects for cards */
   .card-hover {
-    @apply transition-all duration-200 cursor-pointer;
+    @apply transition-all duration-150 cursor-pointer;
   }
   
   .card-hover:hover {
     background-color: var(--muted) !important;
-    border-color: var(--border);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary) / 20%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   
   .dark .card-hover:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   }
   
   /* Ensure clickable cards show pointer cursor */

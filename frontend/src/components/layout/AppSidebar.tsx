@@ -41,10 +41,10 @@ import {
 } from 'lucide-react'
 
 const mainNav = [
-  { name: 'Notebooks', href: '/notebooks', icon: Book },
-  { name: 'Sources', href: '/sources', icon: FileText },
-  { name: 'Podcasts', href: '/podcasts', icon: Mic },
-  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users },
+  { name: 'Sources', href: '/sources', icon: FileText, desc: 'Collect' },
+  { name: 'Notebooks', href: '/notebooks', icon: Book, desc: 'Organize' },
+  { name: 'Podcasts', href: '/podcasts', icon: Mic, desc: 'Create' },
+  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users, desc: 'Customize' },
 ] as const
 
 const settingsNav = [
@@ -226,7 +226,12 @@ export function AppSidebar() {
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  {!isCollapsed && <span>{item.name}</span>}
+                  {!isCollapsed && (
+                    <span className="flex items-center gap-2">
+                      {item.name}
+                      <span className="text-[10px] text-sidebar-foreground/40 font-normal">{item.desc}</span>
+                    </span>
+                  )}
                 </Button>
               )
 

@@ -46,23 +46,24 @@ export function NotebookList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center gap-2">
         {collapsible && (
           <Button
             variant="ghost"
             size="sm"
+            className="h-7 w-7 p-0"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-3.5 w-3.5" />
             ) : (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             )}
           </Button>
         )}
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <span className="text-sm text-muted-foreground">({notebooks.length})</span>
+        <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
+        <span className="text-xs text-muted-foreground/60">({notebooks.length})</span>
       </div>
 
       {isExpanded && (

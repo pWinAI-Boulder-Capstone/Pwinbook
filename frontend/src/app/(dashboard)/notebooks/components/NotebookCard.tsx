@@ -109,20 +109,20 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
               {notebook.description || 'No description'}
             </CardDescription>
 
-            <div className="mt-3 text-xs text-muted-foreground">
-              Updated {formatDistanceToNow(new Date(notebook.updated), { addSuffix: true })}
-            </div>
-
-            {/* Item counts footer */}
-            <div className="mt-3 flex items-center gap-1.5 border-t pt-3">
-              <Badge variant="outline" className="text-xs flex items-center gap-1 px-1.5 py-0.5 text-primary border-primary/50">
-                <FileText className="h-3 w-3" />
-                <span>{notebook.source_count}</span>
-              </Badge>
-              <Badge variant="outline" className="text-xs flex items-center gap-1 px-1.5 py-0.5 text-primary border-primary/50">
-                <StickyNote className="h-3 w-3" />
-                <span>{notebook.note_count}</span>
-              </Badge>
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1">
+                  <FileText className="h-3 w-3" />
+                  {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" />
+                  {notebook.note_count} {notebook.note_count === 1 ? 'note' : 'notes'}
+                </span>
+              </div>
+              <span>
+                {formatDistanceToNow(new Date(notebook.updated), { addSuffix: true })}
+              </span>
             </div>
           </CardContent>
       </Card>
