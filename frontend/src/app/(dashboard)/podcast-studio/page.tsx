@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { useNotebooks } from '@/lib/hooks/use-notebooks'
 import { useEpisodeProfiles } from '@/lib/hooks/use-podcasts'
 import { useToast } from '@/lib/hooks/use-toast'
+import { loadStudioSettings, saveStudioSettings } from '@/lib/hooks/use-persisted-state'
 
 import type { NotebookResponse } from '@/lib/types/api'
 import type { EpisodeProfile } from '@/lib/types/podcasts'
@@ -79,34 +80,58 @@ export default function PodcastStudioPage() {
   const { data: notebooks = [], isLoading: notebooksLoading } = useNotebooks(false)
   const { episodeProfiles = [], isLoading: profilesLoading } = useEpisodeProfiles()
 
-  const [notebookId, setNotebookId] = useState<string>('')
-  const [episodeProfileName, setEpisodeProfileName] = useState<string>('')
-  const [episodeName, setEpisodeName] = useState<string>('')
-  const [briefingSuffix, setBriefingSuffix] = useState<string>('')
+  // Load persisted settings from localStorage (falls back to defaults)
+  const [savedSettings] = useState(() => loadStudioSettings())
 
-  const [mode, setMode] = useState<'segmented' | 'live'>('live')
+  const [notebookId, setNotebookId] = useState<string>(savedSettings.notebookId)
+  const [episodeProfileName, setEpisodeProfileName] = useState<string>(savedSettings.episodeProfileName)
+  const [episodeName, setEpisodeName] = useState<string>(savedSettings.episodeName)
+  const [briefingSuffix, setBriefingSuffix] = useState<string>(savedSettings.briefingSuffix)
 
-  const [factCheckMode, setFactCheckMode] = useState<FactCheckMode>('both')
-  const [turnsPerStep, setTurnsPerStep] = useState<number>(6)
+  const [mode, setMode] = useState<'segmented' | 'live'>(savedSettings.mode)
 
-  const [continuousLive, setContinuousLive] = useState<boolean>(true)
+  const [factCheckMode, setFactCheckMode] = useState<FactCheckMode>(savedSettings.factCheckMode as FactCheckMode)
+  const [turnsPerStep, setTurnsPerStep] = useState<number>(savedSettings.turnsPerStep)
+
+  const [continuousLive, setContinuousLive] = useState<boolean>(savedSettings.continuousLive)
   const [awaitUserQuestion, setAwaitUserQuestion] = useState<string | null>(null)
   const pendingInterruptRef = useRef<boolean>(false)
 
-  const [useCustomSpeakers, setUseCustomSpeakers] = useState<boolean>(true)
+  const [useCustomSpeakers, setUseCustomSpeakers] = useState<boolean>(savedSettings.useCustomSpeakers)
   const [customSpeakers, setCustomSpeakers] = useState<
     Array<{ name: string; role: string; personality: string }>
-  >([
-    { name: 'Host', role: 'Optimistic host who keeps the flow moving', personality: 'Curious, upbeat, concise' },
-    { name: 'Analyst', role: 'Skeptical analyst who challenges claims', personality: 'Precise, evidence-driven, polite' },
-  ])
+  >(savedSettings.customSpeakers)
 
-  const [simulateRealtime, setSimulateRealtime] = useState<boolean>(true)
-  const [realtimeDelayMs, setRealtimeDelayMs] = useState<number>(220)
+  const [simulateRealtime, setSimulateRealtime] = useState<boolean>(savedSettings.simulateRealtime)
+  const [realtimeDelayMs, setRealtimeDelayMs] = useState<number>(savedSettings.realtimeDelayMs)
   const liveAppendTimer = useRef<number | null>(null)
 
-  const [useServerStreaming, setUseServerStreaming] = useState<boolean>(true)
+  const [useServerStreaming, setUseServerStreaming] = useState<boolean>(savedSettings.useServerStreaming)
   const liveAbortRef = useRef<AbortController | null>(null)
+
+  // Persist settings to localStorage whenever they change
+  useEffect(() => {
+    saveStudioSettings({
+      notebookId,
+      episodeProfileName,
+      episodeName,
+      briefingSuffix,
+      mode,
+      factCheckMode,
+      turnsPerStep,
+      continuousLive,
+      useCustomSpeakers,
+      customSpeakers,
+      simulateRealtime,
+      realtimeDelayMs,
+      useServerStreaming,
+    })
+  }, [
+    notebookId, episodeProfileName, episodeName, briefingSuffix,
+    mode, factCheckMode, turnsPerStep, continuousLive,
+    useCustomSpeakers, customSpeakers, simulateRealtime,
+    realtimeDelayMs, useServerStreaming,
+  ])
 
   const liveSteppingRef = useRef<boolean>(false)
   const awaitUserQuestionRef = useRef<string | null>(null)
