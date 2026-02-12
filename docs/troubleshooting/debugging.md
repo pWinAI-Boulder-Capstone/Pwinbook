@@ -534,7 +534,7 @@ docker compose exec open_notebook ping surrealdb
 docker compose exec open_notebook curl -I https://api.openai.com
 
 # Check port bindings
-netstat -tulpn | grep -E "(8000|5055|8502)"
+netstat -tulpn | grep -E "(8001|5055|8502)"
 ```
 
 #### DNS Resolution
@@ -594,7 +594,7 @@ curl -f http://localhost:8502/healthz  # Next.js
 #!/bin/bash
 # health_check.sh
 
-services=("8000" "5055" "8502")
+services=("8001" "5055" "8502")
 for port in "${services[@]}"; do
     if curl -f http://localhost:$port/health* >/dev/null 2>&1; then
         echo "✅ Service on port $port is healthy"

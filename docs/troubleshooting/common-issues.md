@@ -166,7 +166,7 @@ Or provide it when logging into the web interface.
 3. **Common port conflicts**:
    - Port 8502 (Next.js): Often used by other Next.js apps
    - Port 5055 (API): May conflict with other web services
-   - Port 8000 (SurrealDB): May conflict with other databases
+   - Port 8001 (SurrealDB): May conflict with other databases
 
 ### Permission Denied (Docker)
 
