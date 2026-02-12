@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { NoteResponse } from '@/lib/types/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,113 +74,109 @@ export function NotesColumn({
 
   return (
     <>
-      <Card className="h-full flex flex-col flex-1 overflow-hidden">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Notes</CardTitle>
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditingNote(null)
-                setShowAddDialog(true)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Write Note
-            </Button>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Capture insights and observations</h2>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingNote(null)
+              setShowAddDialog(true)
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Write Note
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner />
           </div>
-        </CardHeader>
-
-        <CardContent className="flex-1 overflow-y-auto min-h-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <LoadingSpinner />
-            </div>
-          ) : !notes || notes.length === 0 ? (
-            <EmptyState
-              icon={StickyNote}
-              title="No notes yet"
-              description="Create your first note to capture insights and observations."
-            />
-          ) : (
-            <div className="space-y-3">
-              {notes.map((note) => (
-                <div
-                  key={note.id}
-                  className="p-3 border rounded-lg card-hover group relative cursor-pointer"
-                  onClick={() => setEditingNote(note)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {note.note_type === 'ai' ? (
-                        <Bot className="h-4 w-4 text-primary" />
-                      ) : (
-                        <User className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <Badge variant="secondary" className="text-xs">
-                        {note.note_type === 'ai' ? 'AI Generated' : 'Human'}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(note.updated), { addSuffix: true })}
-                      </span>
-
-                      {/* Context toggle - only show if handler provided */}
-                      {onContextModeChange && contextSelections?.[note.id] && (
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <ContextToggle
-                            mode={contextSelections[note.id]}
-                            hasInsights={false}
-                            onChange={(mode) => onContextModeChange(note.id, mode)}
-                          />
-                        </div>
-                      )}
-
-                      {/* Ellipsis menu for delete action */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteClick(note.id)
-                            }}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Note
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+        ) : !notes || notes.length === 0 ? (
+          <EmptyState
+            icon={StickyNote}
+            title="No notes yet"
+            description="Create your first note to capture insights and observations."
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {notes.map((note) => (
+              <div
+                key={note.id}
+                className="p-3 border rounded-lg card-hover group relative cursor-pointer"
+                onClick={() => setEditingNote(note)}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {note.note_type === 'ai' ? (
+                      <Bot className="h-4 w-4 text-primary" />
+                    ) : (
+                      <User className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <Badge variant="secondary" className="text-xs">
+                      {note.note_type === 'ai' ? 'AI Generated' : 'Human'}
+                    </Badge>
                   </div>
-                  
-                  {note.title && (
-                    <h4 className="text-sm font-medium mb-2">{note.title}</h4>
-                  )}
-                  
-                  {note.content && (
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {note.content}
-                    </p>
-                  )}
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(note.updated), { addSuffix: true })}
+                    </span>
+
+                    {/* Context toggle - only show if handler provided */}
+                    {onContextModeChange && contextSelections?.[note.id] && (
+                      <div onClick={(event) => event.stopPropagation()}>
+                        <ContextToggle
+                          mode={contextSelections[note.id]}
+                          hasInsights={false}
+                          onChange={(mode) => onContextModeChange(note.id, mode)}
+                        />
+                      </div>
+                    )}
+
+                    {/* Ellipsis menu for delete action */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteClick(note.id)
+                          }}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Note
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              ))}
+                
+                {note.title && (
+                  <h4 className="text-sm font-medium mb-2">{note.title}</h4>
+                )}
+                
+                {note.content && (
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {note.content}
+                  </p>
+                )}
+              </div>
+            ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <NoteEditorDialog
         open={showAddDialog || Boolean(editingNote)}

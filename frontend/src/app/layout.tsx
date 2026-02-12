@@ -13,6 +13,13 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "pWinbook",
   description: "Privacy-focused research and knowledge management",
+  icons: {
+    icon: [
+      { url: '/pwin_logo.jpeg', type: 'image/jpeg' },
+      { url: '/pwin_logo.jpeg', sizes: '32x32', type: 'image/jpeg' },
+    ],
+    apple: '/pwin_logo.jpeg',
+  },
 };
 
 export default function RootLayout({
@@ -24,6 +31,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <link rel="icon" href="/pwin_logo.jpeg?v=2" type="image/jpeg" />
       </head>
       <body className={inter.className}>
         <ErrorBoundary>

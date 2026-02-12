@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { SourceListResponse } from '@/lib/types/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,16 +102,16 @@ export function SourcesColumn({
     openModal('source', sourceId)
   }
   return (
-    <Card className="h-full flex flex-col flex-1 overflow-hidden">
-      <CardHeader className="pb-3 flex-shrink-0">
+    <>
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Sources</CardTitle>
+          <h2 className="text-sm font-medium text-muted-foreground">Add and manage sources</h2>
           <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 mr-1.5" />
                 Add Source
-                <ChevronDown className="h-4 w-4 ml-2" />
+                <ChevronDown className="h-4 w-4 ml-1.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -127,11 +126,9 @@ export function SourcesColumn({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
           </div>
         ) : !sources || sources.length === 0 ? (
@@ -141,7 +138,7 @@ export function SourcesColumn({
             description="Add your first source to start building your knowledge base."
           />
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {sources.map((source) => (
               <SourceCard
                 key={source.id}
@@ -161,7 +158,7 @@ export function SourcesColumn({
             ))}
           </div>
         )}
-      </CardContent>
+      </div>
       
       <AddSourceDialog
         open={addDialogOpen}
@@ -197,6 +194,6 @@ export function SourcesColumn({
         isLoading={removeFromNotebook.isPending}
         confirmVariant="default"
       />
-    </Card>
+    </>
   )
 }
