@@ -98,12 +98,11 @@ export default function SearchPage() {
   return (
     <AppShell>
       <div className="p-4 md:p-6">
-        <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Ask and Search</h1>
+        <h1 className="text-xl font-semibold mb-4">Search</h1>
 
-        <Tabs defaultValue="ask" className="w-full space-y-6">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Choose a mode</p>
-            <TabsList aria-label="Ask or search your knowledge base" className="w-full max-w-xl">
+        <Tabs defaultValue="ask" className="w-full space-y-4">
+          <div>
+            <TabsList aria-label="Ask or search your knowledge base" className="w-full max-w-md">
               <TabsTrigger value="ask">
                 <MessageCircleQuestion className="h-4 w-4" />
                 Ask (beta)
@@ -115,15 +114,9 @@ export default function SearchPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="ask" className="mt-6">
+          <TabsContent value="ask" className="mt-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Ask Your Knowledge Base (beta)</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  The LLM will answer your query based on the documents in your knowledge base.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="pt-5 space-y-4">
                 {/* Question Input */}
                 <div className="space-y-2">
                   <Label htmlFor="ask-question">Question</Label>
@@ -246,15 +239,9 @@ export default function SearchPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="search" className="mt-6">
+          <TabsContent value="search" className="mt-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Search</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Search your knowledge base for specific keywords or concepts
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="pt-5 space-y-4">
                 {/* Search Input */}
                 <div className="space-y-2">
                   <div className="flex flex-col sm:flex-row gap-2">

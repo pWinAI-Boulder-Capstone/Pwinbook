@@ -40,34 +40,17 @@ import {
   Plus,
 } from 'lucide-react'
 
-const navigation = [
-  {
-    title: 'Collect',
-    items: [
-      { name: 'Sources', href: '/sources', icon: FileText },
-    ],
-  },
-  {
-    title: 'Process',
-    items: [
-      { name: 'Notebooks', href: '/notebooks', icon: Book },
-    ],
-  },
-  {
-    title: 'Create',
-    items: [
-      { name: 'Podcasts', href: '/podcasts', icon: Mic },
-      { name: 'Podcast Studio', href: '/podcast-studio', icon: Users },
-    ],
-  },
-  {
-    title: 'Manage',
-    items: [
-      { name: 'Models', href: '/models', icon: Bot },
-      { name: 'Transformations', href: '/transformations', icon: Shuffle },
-      { name: 'Settings', href: '/settings', icon: Settings },
-    ],
-  },
+const mainNav = [
+  { name: 'Notebooks', href: '/notebooks', icon: Book },
+  { name: 'Sources', href: '/sources', icon: FileText },
+  { name: 'Podcasts', href: '/podcasts', icon: Mic },
+  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users },
+] as const
+
+const settingsNav = [
+  { name: 'Models', href: '/models', icon: Bot },
+  { name: 'Transformations', href: '/transformations', icon: Shuffle },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 
 type CreateTarget = 'source' | 'notebook' | 'podcast'
@@ -104,7 +87,7 @@ export function AppSidebar() {
       >
         <div
           className={cn(
-            'flex h-16 items-center group',
+            'flex h-14 items-center group',
             isCollapsed ? 'justify-center px-2' : 'justify-between px-4'
           )}
         >
@@ -148,14 +131,14 @@ export function AppSidebar() {
 
         <nav
           className={cn(
-            'flex-1 space-y-1 py-4',
+            'flex-1 space-y-1 py-2',
             isCollapsed ? 'px-2' : 'px-3'
           )}
         >
           <div
             className={cn(
-              'mb-4',
-              isCollapsed ? 'px-0' : 'px-3'
+              'mb-3',
+              isCollapsed ? 'px-0' : 'px-0'
             )}
           >
             <DropdownMenu open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
@@ -229,61 +212,95 @@ export function AppSidebar() {
             </DropdownMenu>
           </div>
 
-          {navigation.map((section, index) => (
-            <div key={section.title}>
-              {index > 0 && (
-                <Separator className="my-3" />
-              )}
-              <div className="space-y-1">
-                {!isCollapsed && (
-                  <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-                    {section.title}
-                  </h3>
-                )}
+          <div className="space-y-1">
+            {mainNav.map((item) => {
+              const isActive = pathname.startsWith(item.href)
+              const button = (
+                <Button
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className={cn(
+                    'w-full gap-3 text-sidebar-foreground h-9',
+                    isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
+                    isCollapsed ? 'justify-center px-2' : 'justify-start'
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {!isCollapsed && <span>{item.name}</span>}
+                </Button>
+              )
 
-                {section.items.map((item) => {
-                  const isActive = pathname.startsWith(item.href)
-                  const button = (
-                    <Button
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      className={cn(
-                        'w-full gap-3 text-sidebar-foreground',
-                        isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
-                        isCollapsed ? 'justify-center px-2' : 'justify-start'
-                      )}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.name}</span>}
-                    </Button>
-                  )
+              if (isCollapsed) {
+                return (
+                  <Tooltip key={item.name}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        {button}
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{item.name}</TooltipContent>
+                  </Tooltip>
+                )
+              }
 
-                  if (isCollapsed) {
-                    return (
-                      <Tooltip key={item.name}>
-                        <TooltipTrigger asChild>
-                          <Link href={item.href}>
-                            {button}
-                          </Link>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">{item.name}</TooltipContent>
-                      </Tooltip>
-                    )
-                  }
+              return (
+                <Link key={item.name} href={item.href}>
+                  {button}
+                </Link>
+              )
+            })}
+          </div>
 
-                  return (
-                    <Link key={item.name} href={item.href}>
-                      {button}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+          <Separator className="my-3" />
+
+          <div className="space-y-1">
+            {!isCollapsed && (
+              <h3 className="mb-1 px-3 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/40">
+                Configure
+              </h3>
+            )}
+            {settingsNav.map((item) => {
+              const isActive = pathname.startsWith(item.href)
+              const button = (
+                <Button
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className={cn(
+                    'w-full gap-3 text-sidebar-foreground/70 h-8 text-sm',
+                    isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
+                    isCollapsed ? 'justify-center px-2' : 'justify-start'
+                  )}
+                >
+                  <item.icon className="h-3.5 w-3.5" />
+                  {!isCollapsed && <span>{item.name}</span>}
+                </Button>
+              )
+
+              if (isCollapsed) {
+                return (
+                  <Tooltip key={item.name}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        {button}
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{item.name}</TooltipContent>
+                  </Tooltip>
+                )
+              }
+
+              return (
+                <Link key={item.name} href={item.href}>
+                  {button}
+                </Link>
+              )
+            })}
+          </div>
         </nav>
 
         <div
           className={cn(
-            'border-t border-sidebar-border p-3 space-y-2',
+            'border-t border-sidebar-border p-2 space-y-1',
             isCollapsed && 'px-2'
           )}
         >
@@ -311,22 +328,24 @@ export function AppSidebar() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="outline"
-                  className="w-full justify-center"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center text-sidebar-foreground/60 hover:text-sidebar-foreground"
                   onClick={logout}
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">Sign Out</TooltipContent>
             </Tooltip>
           ) : (
             <Button
-              variant="outline"
-              className="w-full justify-start gap-3"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-3 text-sidebar-foreground/60 hover:text-sidebar-foreground"
               onClick={logout}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
               Sign Out
             </Button>
           )}

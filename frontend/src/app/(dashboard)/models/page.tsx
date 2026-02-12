@@ -45,16 +45,16 @@ export default function ModelsPage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Model Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Configure AI models for different purposes across Open Notebook
+              <h1 className="text-xl font-semibold">Models</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Configure AI models for different purposes
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh}>
+              <RefreshCw className="h-3.5 w-3.5" />
             </Button>
         </div>
 

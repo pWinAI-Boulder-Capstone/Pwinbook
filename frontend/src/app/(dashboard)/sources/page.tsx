@@ -280,11 +280,11 @@ export default function SourcesPage() {
 
   return (
     <AppShell>
-      <div className="flex flex-col h-full w-full max-w-none px-6 py-6">
-        <div className="mb-6 flex-shrink-0">
-          <h1 className="text-3xl font-bold">All Sources</h1>
-          <p className="mt-2 text-muted-foreground">
-            Browse all sources across your notebooks. Use arrow keys to navigate and Enter to open.
+      <div className="flex flex-col h-full w-full max-w-none px-6 py-4">
+        <div className="mb-4 flex-shrink-0">
+          <h1 className="text-xl font-semibold">Sources</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            All sources across your notebooks
           </p>
         </div>
 

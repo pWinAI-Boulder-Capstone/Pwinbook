@@ -48,12 +48,12 @@ export default function NotebooksPage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">Notebooks</h1>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">Notebooks</h1>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()}>
+              <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">

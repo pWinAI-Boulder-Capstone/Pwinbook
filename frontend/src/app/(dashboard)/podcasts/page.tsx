@@ -14,21 +14,20 @@ export default function PodcastsPage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="px-6 py-6 space-y-6">
-          <header className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Podcasts</h1>
-            <p className="text-muted-foreground">
-              Keep track of generated episodes and manage reusable templates.
+        <div className="px-6 py-4 space-y-4">
+          <header>
+            <h1 className="text-xl font-semibold">Podcasts</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Generated episodes and reusable templates
             </p>
           </header>
 
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as 'episodes' | 'templates')}
-            className="space-y-6"
+            className="space-y-4"
           >
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Choose a view</p>
+            <div>
               <TabsList aria-label="Podcast views" className="w-full max-w-md">
                 <TabsTrigger value="episodes">
                   <Mic className="h-4 w-4" />

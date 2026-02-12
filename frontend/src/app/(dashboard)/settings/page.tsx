@@ -14,10 +14,10 @@ export default function SettingsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6">
           <div className="max-w-4xl">
-            <div className="flex items-center gap-4 mb-6">
-              <h1 className="text-2xl font-bold">Settings</h1>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4" />
+            <div className="flex items-center gap-3 mb-4">
+              <h1 className="text-xl font-semibold">Settings</h1>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()}>
+                <RefreshCw className="h-3.5 w-3.5" />
               </Button>
             </div>
             <SettingsForm />

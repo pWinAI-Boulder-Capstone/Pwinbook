@@ -24,25 +24,24 @@ export default function TransformationsPage() {
   return (
     <AppShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold">Transformations</h1>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4" />
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold">Transformations</h1>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()}>
+                <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
 
         <div className="max-w-5xl">
-          <p className="text-muted-foreground">
-            Transformations are prompts that will be used by the LLM to process a source and extract insights, summaries, etc.
+          <p className="text-sm text-muted-foreground">
+            Prompts used by the LLM to extract insights, summaries, and more from sources.
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Choose a workspace</p>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div>
             <TabsList aria-label="Transformation views" className="w-full max-w-xl">
               <TabsTrigger value="transformations" className="flex items-center gap-2">
                 <Wand2 className="h-4 w-4" />
