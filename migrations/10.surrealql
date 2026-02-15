@@ -1,0 +1,38 @@
+-- Migration 10: Add agentic_podcast_workflow table for multi-agent podcast generation
+-- Phase 1: Director and Writer agents
+
+-- Create agentic_podcast_workflow table
+DEFINE TABLE IF NOT EXISTS agentic_podcast_workflow SCHEMAFULL;
+
+-- Basic identification
+DEFINE FIELD IF NOT EXISTS name ON TABLE agentic_podcast_workflow TYPE string;
+
+-- Source content
+DEFINE FIELD IF NOT EXISTS content ON TABLE agentic_podcast_workflow TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS notebook_id ON TABLE agentic_podcast_workflow TYPE option<record<notebook>>;
+
+-- Profile references
+DEFINE FIELD IF NOT EXISTS episode_profile_name ON TABLE agentic_podcast_workflow TYPE string;
+DEFINE FIELD IF NOT EXISTS speaker_profile_name ON TABLE agentic_podcast_workflow TYPE string;
+DEFINE FIELD IF NOT EXISTS briefing ON TABLE agentic_podcast_workflow TYPE string;
+
+-- Workflow state
+DEFINE FIELD IF NOT EXISTS current_stage ON TABLE agentic_podcast_workflow TYPE string;
+DEFINE FIELD IF NOT EXISTS status ON TABLE agentic_podcast_workflow TYPE string;
+
+-- Agent outputs (Phase 1: Director and Writer)
+DEFINE FIELD IF NOT EXISTS director_output ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<object>;
+DEFINE FIELD IF NOT EXISTS writer_outputs ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<array<object>>;
+
+-- Error tracking
+DEFINE FIELD IF NOT EXISTS error_message ON TABLE agentic_podcast_workflow TYPE option<string>;
+
+-- Timestamps
+DEFINE FIELD IF NOT EXISTS created ON TABLE agentic_podcast_workflow TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated ON TABLE agentic_podcast_workflow TYPE datetime DEFAULT time::now();
+
+-- Indexes for better query performance
+DEFINE INDEX IF NOT EXISTS idx_agentic_workflow_status ON TABLE agentic_podcast_workflow COLUMNS status CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_agentic_workflow_stage ON TABLE agentic_podcast_workflow COLUMNS current_stage CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_agentic_workflow_created ON TABLE agentic_podcast_workflow COLUMNS created CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_agentic_workflow_episode_profile ON TABLE agentic_podcast_workflow COLUMNS episode_profile_name CONCURRENTLY;

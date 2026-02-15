@@ -6,6 +6,7 @@ from loguru import logger
 
 from api.auth import PasswordAuthMiddleware
 from api.routers import (
+    agentic_podcasts,
     auth,
     chat,
     config,
@@ -110,6 +111,7 @@ app.include_router(insights.router, prefix="/api", tags=["insights"])
 app.include_router(commands_router.router, prefix="/api", tags=["commands"])
 app.include_router(podcasts.router, prefix="/api", tags=["podcasts"])
 app.include_router(podcast_scripts.router, prefix="/api", tags=["podcast-scripts"])
+app.include_router(agentic_podcasts.router, prefix="/api/agentic-podcasts", tags=["agentic-podcasts"])
 app.include_router(episode_profiles.router, prefix="/api", tags=["episode-profiles"])
 app.include_router(speaker_profiles.router, prefix="/api", tags=["speaker-profiles"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
