@@ -356,16 +356,18 @@ async def stream_source_chat_response(
             )
         )
         
-        # Stream the complete AI response
+        # Stream only the new AI response (last AI message in result)
         if "messages" in result:
-            for msg in result["messages"]:
-                if hasattr(msg, 'type') and msg.type == 'ai':
-                    ai_event = {
-                        "type": "ai_message", 
-                        "content": msg.content if hasattr(msg, 'content') else str(msg),
-                        "timestamp": None
-                    }
-                    yield f"data: {json.dumps(ai_event)}\n\n"
+            ai_messages = [m for m in result["messages"] if getattr(m, "type", None) == "ai"]
+            if ai_messages:
+                last_ai = ai_messages[-1]
+                content = getattr(last_ai, "content", None) or str(last_ai)
+                ai_event = {
+                    "type": "ai_message",
+                    "content": content,
+                    "timestamp": None,
+                }
+                yield f"data: {json.dumps(ai_event)}\n\n"
         
         # Stream context indicators
         if "context_indicators" in result:

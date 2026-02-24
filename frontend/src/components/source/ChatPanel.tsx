@@ -318,7 +318,7 @@ export function ChatPanel({
   )
 }
 
-// Helper component to render AI messages with clickable references
+// Helper component to render AI messages with clickable references or generated images
 function AIMessageContent({
   content,
   onReferenceClick
@@ -326,6 +326,19 @@ function AIMessageContent({
   content: string
   onReferenceClick: (type: string, id: string) => void
 }) {
+  // Generated image (data URL from image generation in Chat with source)
+  if (content.startsWith('data:image/')) {
+    return (
+      <div className="rounded overflow-hidden max-w-full">
+        <img
+          src={content}
+          alt="Generated"
+          className="max-h-[320px] w-auto object-contain rounded"
+        />
+      </div>
+    )
+  }
+
   // Convert references to compact markdown with numbered citations
   const markdownWithCompactRefs = convertReferencesToCompactMarkdown(content)
 

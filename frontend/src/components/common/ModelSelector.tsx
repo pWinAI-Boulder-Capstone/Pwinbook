@@ -7,7 +7,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 
 interface ModelSelectorProps {
   label?: string
-  modelType: 'language' | 'embedding' | 'speech_to_text' | 'text_to_speech'
+  modelType: 'language' | 'embedding' | 'speech_to_text' | 'text_to_speech' | 'image_generation'
   value: string
   onChange: (value: string) => void
   placeholder?: string
