@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { CreateModelRequest, ProviderAvailability } from '@/lib/types/models'
+import { CreateModelRequest, ModelType, ProviderAvailability } from '@/lib/types/models'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +12,7 @@ import { useCreateModel } from '@/lib/hooks/use-models'
 import { Plus } from 'lucide-react'
 
 interface AddModelFormProps {
-  modelType: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text'
+  modelType: ModelType
   providers: ProviderAvailability
 }
 
@@ -50,6 +50,8 @@ export function AddModelForm({ modelType, providers }: AddModelFormProps) {
         return 'e.g., tts-gpt-4o-mini-tts, tts-1-hd'
       case 'speech_to_text':
         return 'e.g., whisper-1'
+      case 'image_generation':
+        return 'e.g., dall-e-3, dall-e-2'
       default:
         return 'Enter model name'
     }

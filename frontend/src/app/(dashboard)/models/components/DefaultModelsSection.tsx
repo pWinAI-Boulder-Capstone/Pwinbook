@@ -21,7 +21,7 @@ interface DefaultConfig {
   key: keyof ModelDefaults
   label: string
   description: string
-  modelType: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text'
+  modelType: Model['type']
   required?: boolean
 }
 
@@ -70,6 +70,12 @@ const defaultConfigs: DefaultConfig[] = [
     label: 'Speech-to-Text Model',
     description: 'Used for audio transcription',
     modelType: 'speech_to_text'
+  },
+  {
+    key: 'default_image_model',
+    label: 'Image Generation Model',
+    description: 'Used for generating images from text prompts',
+    modelType: 'image_generation'
   }
 ]
 
@@ -135,7 +141,7 @@ export function DefaultModelsSection({ models, defaults }: DefaultModelsSectionP
     setShowEmbeddingDialog(false)
   }
 
-  const getModelsForType = (type: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text') => {
+  const getModelsForType = (type: Model['type']) => {
     return models.filter(model => model.type === type)
   }
 

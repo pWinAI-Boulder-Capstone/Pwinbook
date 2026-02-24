@@ -91,7 +91,7 @@ async def create_model(model_data: ModelCreate):
     """Create a new model configuration."""
     try:
         # Validate model type
-        valid_types = ["language", "embedding", "text_to_speech", "speech_to_text"]
+        valid_types = ["language", "embedding", "text_to_speech", "speech_to_text", "image_generation"]
         if model_data.type not in valid_types:
             raise HTTPException(
                 status_code=400,
@@ -166,6 +166,7 @@ async def get_default_models():
             default_speech_to_text_model=defaults.default_speech_to_text_model,  # type: ignore[attr-defined]
             default_embedding_model=defaults.default_embedding_model,  # type: ignore[attr-defined]
             default_tools_model=defaults.default_tools_model,  # type: ignore[attr-defined]
+            default_image_model=defaults.default_image_model,  # type: ignore[attr-defined]
         )
     except Exception as e:
         logger.error(f"Error fetching default models: {str(e)}")
@@ -193,6 +194,8 @@ async def update_default_models(defaults_data: DefaultModelsResponse):
             defaults.default_embedding_model = defaults_data.default_embedding_model  # type: ignore[attr-defined]
         if defaults_data.default_tools_model is not None:
             defaults.default_tools_model = defaults_data.default_tools_model  # type: ignore[attr-defined]
+        if defaults_data.default_image_model is not None:
+            defaults.default_image_model = defaults_data.default_image_model  # type: ignore[attr-defined]
         
         await defaults.update()
 
@@ -206,6 +209,7 @@ async def update_default_models(defaults_data: DefaultModelsResponse):
             default_speech_to_text_model=defaults.default_speech_to_text_model,  # type: ignore[attr-defined]
             default_embedding_model=defaults.default_embedding_model,  # type: ignore[attr-defined]
             default_tools_model=defaults.default_tools_model,  # type: ignore[attr-defined]
+            default_image_model=defaults.default_image_model,  # type: ignore[attr-defined]
         )
     except HTTPException:
         raise
@@ -284,6 +288,13 @@ async def get_provider_availability():
                     if model_type in esperanto_available and provider in esperanto_available[model_type]:
                         if _check_azure_support(mode):
                             supported_types[provider].append(model_type)
+            # OpenRouter: add image_generation (bypass Esperanto - OpenRouter supports it)
+            elif provider == "openrouter" and os.environ.get("OPENROUTER_API_KEY"):
+                for model_type, providers in esperanto_available.items():
+                    if provider in providers:
+                        supported_types[provider].append(model_type)
+                if "image_generation" not in supported_types[provider]:
+                    supported_types[provider].append("image_generation")
             else:
                 # Standard provider detection
                 for model_type, providers in esperanto_available.items():

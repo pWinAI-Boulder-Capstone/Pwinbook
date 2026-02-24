@@ -137,14 +137,20 @@ export function useSourceChat(sourceId: string) {
       const reader = response.getReader()
       const decoder = new TextDecoder()
       let aiMessage: SourceChatMessage | null = null
+      // Buffer incomplete lines so we never parse truncated JSON (e.g. large image data URLs spanning chunks)
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const text = decoder.decode(value)
-        const lines = text.split('\n')
+        buffer += decoder.decode(value, { stream: true })
+        const lineEnd = buffer.lastIndexOf('\n')
+        if (lineEnd === -1) continue
+        const complete = buffer.slice(0, lineEnd)
+        buffer = buffer.slice(lineEnd + 1)
 
+        const lines = complete.split('\n')
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
@@ -177,6 +183,39 @@ export function useSourceChat(sourceId: string) {
             } catch (e) {
               console.error('Error parsing SSE data:', e)
             }
+          }
+        }
+      }
+      // Process any remaining buffered line
+      if (buffer.trim()) {
+        if (buffer.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(buffer.slice(6))
+            if (data.type === 'ai_message') {
+              if (!aiMessage) {
+                aiMessage = {
+                  id: `ai-${Date.now()}`,
+                  type: 'ai',
+                  content: data.content || '',
+                  timestamp: new Date().toISOString()
+                }
+                setMessages(prev => [...prev, aiMessage!])
+              } else {
+                aiMessage.content += data.content || ''
+                setMessages(prev =>
+                  prev.map(msg => msg.id === aiMessage!.id
+                    ? { ...msg, content: aiMessage!.content }
+                    : msg
+                )
+                )
+              }
+            } else if (data.type === 'context_indicators') {
+              setContextIndicators(data.data)
+            } else if (data.type === 'error') {
+              throw new Error(data.message || 'Stream error')
+            }
+          } catch (e) {
+            console.error('Error parsing SSE data:', e)
           }
         }
       }

@@ -1,8 +1,10 @@
+export type ModelType = 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text' | 'image_generation'
+
 export interface Model {
   id: string
   name: string
   provider: string
-  type: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text'
+  type: ModelType
   created: string
   updated: string
 }
@@ -10,7 +12,7 @@ export interface Model {
 export interface CreateModelRequest {
   name: string
   provider: string
-  type: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text'
+  type: ModelType
 }
 
 export interface ModelDefaults {
@@ -21,6 +23,7 @@ export interface ModelDefaults {
   default_speech_to_text_model?: string | null
   default_embedding_model?: string | null
   default_tools_model?: string | null
+  default_image_model?: string | null
 }
 
 export interface ProviderAvailability {
