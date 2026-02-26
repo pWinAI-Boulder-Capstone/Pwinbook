@@ -53,6 +53,8 @@ class AgenticWorkflowDetailResponse(BaseModel):
     updated: Optional[str] = None
     director_output: Optional[Dict[str, Any]] = None
     writer_outputs: Optional[List[Dict[str, Any]]] = None
+    reviewer_output: Optional[Dict[str, Any]] = None
+    compliance_output: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
 
 
@@ -215,6 +217,8 @@ class AgenticPodcastService:
                     num_segments=num_segments,
                     outline_model=episode_profile.outline_model,
                     transcript_model=episode_profile.transcript_model,
+                    reviewer_model=getattr(episode_profile, 'reviewer_model', None),
+                    compliance_model=getattr(episode_profile, 'compliance_model', None),
                 )
 
                 return AgenticWorkflowResponse(
@@ -265,6 +269,8 @@ class AgenticPodcastService:
                 updated=workflow.updated.isoformat() if workflow.updated else None,
                 director_output=workflow.director_output,
                 writer_outputs=workflow.writer_outputs,
+                reviewer_output=workflow.reviewer_output,
+                compliance_output=workflow.compliance_output,
                 error_message=workflow.error_message,
             )
 

@@ -1,4 +1,4 @@
-# domain models for agentic podcast workflow (phase 1: director + writer)
+# domain models for agentic podcast workflow (phase 2: director + writer + reviewer + compliance)
 
 from typing import Any, ClassVar, Dict, List, Literal, Optional
 
@@ -8,7 +8,9 @@ from open_notebook.domain.base import ObjectModel
 
 
 # workflow stages and statuses
-WorkflowStage = Literal["director", "writer", "completed", "failed"]
+WorkflowStage = Literal[
+    "director", "writer", "reviewer", "compliance", "completed", "failed"
+]
 WorkflowStatus = Literal["pending", "in_progress", "completed", "failed"]
 SegmentSize = Literal["short", "medium", "long"]
 
@@ -52,8 +54,42 @@ class WriterOutput(BaseModel):
     )
 
 
+class ReviewerOutput(BaseModel):
+    """output from the Reviewer agent"""
+
+    overall_score: float = Field(
+        ..., description="Overall quality score 0-10"
+    )
+    scores: Dict[str, float] = Field(
+        ..., description="Individual category scores (factual_accuracy, speaker_consistency, etc.)"
+    )
+    issues: List[Dict[str, Any]] = Field(
+        default_factory=list, description="List of issues found"
+    )
+    summary: str = Field(..., description="Brief overall assessment")
+    revised_transcript: List[TranscriptLine] = Field(
+        ..., description="Revised and improved transcript"
+    )
+
+
+class ComplianceOutput(BaseModel):
+    """output from the Compliance agent"""
+
+    approved: bool = Field(..., description="Whether the transcript is approved for production")
+    overall_risk_level: str = Field(
+        ..., description="low, medium, or high"
+    )
+    checks: Dict[str, Dict[str, Any]] = Field(
+        ..., description="Individual compliance checks with passed/notes"
+    )
+    flags: List[Dict[str, Any]] = Field(
+        default_factory=list, description="List of compliance flags"
+    )
+    summary: str = Field(..., description="Overall compliance assessment")
+
+
 class AgenticPodcastWorkflow(ObjectModel):
-    """tracks multi-agent workflow state through director and writer stages"""
+    """tracks multi-agent workflow state through director, writer, reviewer, and compliance stages"""
 
     table_name: ClassVar[str] = "agentic_podcast_workflow"
 
@@ -80,12 +116,18 @@ class AgenticPodcastWorkflow(ObjectModel):
         default="pending", description="Current status of the workflow"
     )
 
-    # phase 1: just director and writer outputs
+    # Agent outputs
     director_output: Optional[Dict[str, Any]] = Field(
         default=None, description="Output from Director agent (stored as dict)"
     )
     writer_outputs: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Outputs from Writer agent for each segment"
+    )
+    reviewer_output: Optional[Dict[str, Any]] = Field(
+        default=None, description="Output from Reviewer agent (stored as dict)"
+    )
+    compliance_output: Optional[Dict[str, Any]] = Field(
+        default=None, description="Output from Compliance agent (stored as dict)"
     )
 
     error_message: Optional[str] = Field(
@@ -112,8 +154,37 @@ class AgenticPodcastWorkflow(ObjectModel):
         """save writer outputs as dicts"""
         self.writer_outputs = [w.model_dump() for w in outputs]
 
+    def get_reviewer_output(self) -> Optional[ReviewerOutput]:
+        """parse reviewer output from dict"""
+        if self.reviewer_output:
+            return ReviewerOutput(**self.reviewer_output)
+        return None
+
+    def set_reviewer_output(self, output: ReviewerOutput) -> None:
+        """save reviewer output as dict"""
+        self.reviewer_output = output.model_dump()
+
+    def get_compliance_output(self) -> Optional[ComplianceOutput]:
+        """parse compliance output from dict"""
+        if self.compliance_output:
+            return ComplianceOutput(**self.compliance_output)
+        return None
+
+    def set_compliance_output(self, output: ComplianceOutput) -> None:
+        """save compliance output as dict"""
+        self.compliance_output = output.model_dump()
+
     def get_full_transcript(self) -> List[TranscriptLine]:
-        """combine all segments into one transcript, sorted by segment index"""
+        """get the best available transcript
+
+        priority: reviewer's revised transcript > raw writer outputs
+        """
+        # prefer the reviewer's revised transcript if available
+        reviewer = self.get_reviewer_output()
+        if reviewer and reviewer.revised_transcript:
+            return reviewer.revised_transcript
+
+        # fallback to writer outputs
         transcript: List[TranscriptLine] = []
         writer_outputs = self.get_writer_outputs()
 

@@ -1,4 +1,4 @@
-"""langgraph workflow for agentic podcast generation (phase 1: director + writer)
+"""langgraph workflow for agentic podcast generation (phase 2: director + writer + reviewer + compliance)
 """
 
 import operator
@@ -10,12 +10,16 @@ from langgraph.types import Send
 from loguru import logger
 from typing_extensions import TypedDict
 
+from open_notebook.agents.compliance import compliance_agent
 from open_notebook.agents.director import director_agent
+from open_notebook.agents.reviewer import reviewer_agent
 from open_notebook.agents.writer import writer_agent
 from open_notebook.domain.agentic_podcast import (
     AgenticPodcastWorkflow,
+    ComplianceOutput,
     DirectorOutput,
     OutlineSegment,
+    ReviewerOutput,
     WriterOutput,
 )
 
@@ -35,10 +39,14 @@ class AgenticPodcastState(TypedDict):
     # Model configuration
     outline_model: Optional[str]
     transcript_model: Optional[str]
+    reviewer_model: Optional[str]
+    compliance_model: Optional[str]
 
     # Agent outputs
     director_output: Optional[DirectorOutput]
     writer_outputs: Annotated[List[WriterOutput], operator.add]
+    reviewer_output: Optional[ReviewerOutput]
+    compliance_output: Optional[ComplianceOutput]
 
     # Control flow
     current_stage: str
@@ -218,6 +226,145 @@ async def write_segment(
         }
 
 
+async def run_reviewer(
+    state: AgenticPodcastState, config: RunnableConfig
+) -> Dict[str, Any]:
+    """execute the Reviewer agent to evaluate and revise the transcript
+
+    The reviewer receives the combined transcript from all writer segments,
+    checks it against the source content and outline, and produces a revised
+    version with quality scores.
+
+    Args:
+        state: Current workflow state
+        config: Runnable configuration
+
+    Returns:
+        updated state with reviewer_output
+    """
+    logger.info(f"Running Reviewer agent for workflow {state['workflow_id']}")
+
+    try:
+        workflow = await AgenticPodcastWorkflow.get(state["workflow_id"])
+        await workflow.update_stage("reviewer", "in_progress")
+
+        # combine all writer outputs into a single transcript
+        writer_outputs = state.get("writer_outputs", [])
+        sorted_outputs = sorted(writer_outputs, key=lambda x: x.segment_index)
+        combined_transcript = []
+        for wo in sorted_outputs:
+            combined_transcript.extend(wo.transcript)
+
+        # get the outline segments from director output
+        director_output = state["director_output"]
+        outline_segments = director_output.segments if director_output else []
+
+        reviewer_output = await reviewer_agent(
+            transcript=combined_transcript,
+            content=state["content"],
+            briefing=state["briefing"],
+            speakers=state["speakers"],
+            outline_segments=outline_segments,
+            model_name=state.get("reviewer_model"),
+        )
+
+        # save reviewer output to workflow
+        workflow.set_reviewer_output(reviewer_output)
+        await workflow.save()
+
+        logger.info(
+            f"Reviewer completed: score={reviewer_output.overall_score}, "
+            f"issues={len(reviewer_output.issues)}"
+        )
+
+        return {
+            "reviewer_output": reviewer_output,
+            "current_stage": "compliance",
+        }
+
+    except Exception as e:
+        error_msg = f"Reviewer agent failed: {str(e)}"
+        logger.error(error_msg)
+        logger.exception(e)
+
+        # reviewer failure is non-fatal — we can proceed without a revised transcript
+        logger.warning("Proceeding to compliance with original writer transcript")
+        return {
+            "errors": [error_msg],
+            "current_stage": "compliance",
+        }
+
+
+async def run_compliance(
+    state: AgenticPodcastState, config: RunnableConfig
+) -> Dict[str, Any]:
+    """execute the Compliance agent for final safety and quality gate
+
+    Checks the best available transcript (reviewer-revised or original writer output)
+    for safety, bias, misinformation, and other compliance concerns.
+
+    Args:
+        state: Current workflow state
+        config: Runnable configuration
+
+    Returns:
+        updated state with compliance_output
+    """
+    logger.info(f"Running Compliance agent for workflow {state['workflow_id']}")
+
+    try:
+        workflow = await AgenticPodcastWorkflow.get(state["workflow_id"])
+        await workflow.update_stage("compliance", "in_progress")
+
+        # use the reviewer's revised transcript if available, else the raw writer outputs
+        reviewer_output = state.get("reviewer_output")
+        if reviewer_output and reviewer_output.revised_transcript:
+            transcript = reviewer_output.revised_transcript
+            reviewer_summary = reviewer_output.summary
+        else:
+            writer_outputs = state.get("writer_outputs", [])
+            sorted_outputs = sorted(writer_outputs, key=lambda x: x.segment_index)
+            transcript = []
+            for wo in sorted_outputs:
+                transcript.extend(wo.transcript)
+            reviewer_summary = None
+
+        compliance_output = await compliance_agent(
+            transcript=transcript,
+            content=state["content"],
+            briefing=state["briefing"],
+            speakers=state["speakers"],
+            reviewer_summary=reviewer_summary,
+            model_name=state.get("compliance_model"),
+        )
+
+        # save compliance output to workflow
+        workflow.set_compliance_output(compliance_output)
+        await workflow.save()
+
+        logger.info(
+            f"Compliance completed: approved={compliance_output.approved}, "
+            f"risk={compliance_output.overall_risk_level}"
+        )
+
+        return {
+            "compliance_output": compliance_output,
+            "current_stage": "completed",
+        }
+
+    except Exception as e:
+        error_msg = f"Compliance agent failed: {str(e)}"
+        logger.error(error_msg)
+        logger.exception(e)
+
+        # compliance failure is non-fatal — still save the workflow
+        logger.warning("Proceeding to save without compliance check")
+        return {
+            "errors": [error_msg],
+            "current_stage": "completed",
+        }
+
+
 async def save_workflow(
     state: AgenticPodcastState, config: RunnableConfig
 ) -> Dict[str, Any]:
@@ -281,11 +428,13 @@ def build_agentic_podcast_graph() -> StateGraph:
     """build the LangGraph workflow for agentic podcast generation
 
     The workflow follows this structure:
-    1. START - run_director (create outline)
-    2. run_director - trigger_segment_writers (fan out)
-    3. trigger_segment_writers - write_segment (parallel execution)
-    4. write_segment - save_workflow (collect results)
-    5. save_workflow - END
+    1. START → run_director (create outline)
+    2. run_director → trigger_segment_writers (fan out)
+    3. trigger_segment_writers → write_segment (parallel execution)
+    4. write_segment → run_reviewer (evaluate and revise transcript)
+    5. run_reviewer → run_compliance (safety and quality gate)
+    6. run_compliance → save_workflow (persist results)
+    7. save_workflow → END
 
     Returns:
         compiled stategraph ready for execution
@@ -296,6 +445,8 @@ def build_agentic_podcast_graph() -> StateGraph:
     # add nodes
     workflow.add_node("run_director", run_director)
     workflow.add_node("write_segment", write_segment)
+    workflow.add_node("run_reviewer", run_reviewer)
+    workflow.add_node("run_compliance", run_compliance)
     workflow.add_node("save_workflow", save_workflow)
 
     # add edges
@@ -308,8 +459,15 @@ def build_agentic_podcast_graph() -> StateGraph:
         ["write_segment"],
     )
 
-    # all segment writers converge to save_workflow
-    workflow.add_edge("write_segment", "save_workflow")
+    # all segment writers converge to reviewer
+    workflow.add_edge("write_segment", "run_reviewer")
+
+    # reviewer feeds into compliance
+    workflow.add_edge("run_reviewer", "run_compliance")
+
+    # compliance feeds into save
+    workflow.add_edge("run_compliance", "save_workflow")
+
     workflow.add_edge("save_workflow", END)
 
     # compile the graph
@@ -326,6 +484,8 @@ async def run_agentic_podcast_workflow(
     num_segments: int = 5,
     outline_model: Optional[str] = None,
     transcript_model: Optional[str] = None,
+    reviewer_model: Optional[str] = None,
+    compliance_model: Optional[str] = None,
 ) -> AgenticPodcastWorkflow:
     """execute the complete agentic podcast workflow
 
@@ -341,6 +501,8 @@ async def run_agentic_podcast_workflow(
         num_segments: Number of segments to create (default: 5)
         outline_model: Optional model override for Director
         transcript_model: Optional model override for Writer
+        reviewer_model: Optional model override for Reviewer
+        compliance_model: Optional model override for Compliance
 
     Returns:
         completed AgenticPodcastWorkflow with all outputs
@@ -364,8 +526,12 @@ async def run_agentic_podcast_workflow(
         "num_segments": num_segments,
         "outline_model": outline_model,
         "transcript_model": transcript_model,
+        "reviewer_model": reviewer_model,
+        "compliance_model": compliance_model,
         "director_output": None,
         "writer_outputs": [],
+        "reviewer_output": None,
+        "compliance_output": None,
         "current_stage": "director",
         "errors": [],
     }

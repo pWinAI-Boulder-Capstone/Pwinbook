@@ -1,5 +1,5 @@
 -- Migration 10: Add agentic_podcast_workflow table for multi-agent podcast generation
--- Phase 1: Director and Writer agents
+-- Phase 2: Director, Writer, Reviewer, and Compliance agents
 
 -- Create agentic_podcast_workflow table
 DEFINE TABLE IF NOT EXISTS agentic_podcast_workflow SCHEMAFULL;
@@ -20,9 +20,11 @@ DEFINE FIELD IF NOT EXISTS briefing ON TABLE agentic_podcast_workflow TYPE strin
 DEFINE FIELD IF NOT EXISTS current_stage ON TABLE agentic_podcast_workflow TYPE string;
 DEFINE FIELD IF NOT EXISTS status ON TABLE agentic_podcast_workflow TYPE string;
 
--- Agent outputs (Phase 1: Director and Writer)
+-- Agent outputs
 DEFINE FIELD IF NOT EXISTS director_output ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<object>;
 DEFINE FIELD IF NOT EXISTS writer_outputs ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<array<object>>;
+DEFINE FIELD IF NOT EXISTS reviewer_output ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<object>;
+DEFINE FIELD IF NOT EXISTS compliance_output ON TABLE agentic_podcast_workflow FLEXIBLE TYPE option<object>;
 
 -- Error tracking
 DEFINE FIELD IF NOT EXISTS error_message ON TABLE agentic_podcast_workflow TYPE option<string>;
