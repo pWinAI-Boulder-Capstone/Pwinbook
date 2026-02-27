@@ -1,5 +1,6 @@
 # reviewer agent - evaluates transcript quality and produces a revised version
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from ai_prompter import Prompter
@@ -70,20 +71,36 @@ async def reviewer_agent(
             system_prompt,
             model_name,
             "tools",
-            max_tokens=8000,
+            max_tokens=4096,
             structured={"type": "json"},
         )
 
         logger.debug("calling ai model for transcript review")
-        ai_message = await model.ainvoke(system_prompt)
 
-        content_text = (
-            ai_message.content
-            if isinstance(ai_message.content, str)
-            else str(ai_message.content)
-        )
-        cleaned = clean_thinking_content(content_text)
-        review = parser.parse(cleaned)
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                ai_message = await model.ainvoke(system_prompt)
+
+                content_text = (
+                    ai_message.content
+                    if isinstance(ai_message.content, str)
+                    else str(ai_message.content)
+                )
+                cleaned = clean_thinking_content(content_text)
+
+                if not cleaned or not cleaned.strip():
+                    raise ValueError("Model returned empty content")
+
+                review = parser.parse(cleaned)
+                break
+            except Exception as parse_err:
+                last_error = parse_err
+                logger.warning(f"Reviewer attempt {attempt}/3 failed: {parse_err}")
+                if attempt < 3:
+                    await asyncio.sleep(2 * attempt)
+        else:
+            raise RuntimeError(f"Reviewer failed after 3 attempts: {last_error}")
 
         reviewer_output = ReviewerOutput(
             overall_score=review.overall_score,

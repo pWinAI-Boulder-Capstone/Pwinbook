@@ -1,5 +1,6 @@
 # compliance agent - final safety and quality gate before production
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from ai_prompter import Prompter
@@ -76,15 +77,31 @@ async def compliance_agent(
         )
 
         logger.debug("calling ai model for compliance check")
-        ai_message = await model.ainvoke(system_prompt)
 
-        content_text = (
-            ai_message.content
-            if isinstance(ai_message.content, str)
-            else str(ai_message.content)
-        )
-        cleaned = clean_thinking_content(content_text)
-        result = parser.parse(cleaned)
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                ai_message = await model.ainvoke(system_prompt)
+
+                content_text = (
+                    ai_message.content
+                    if isinstance(ai_message.content, str)
+                    else str(ai_message.content)
+                )
+                cleaned = clean_thinking_content(content_text)
+
+                if not cleaned or not cleaned.strip():
+                    raise ValueError("Model returned empty content")
+
+                result = parser.parse(cleaned)
+                break
+            except Exception as parse_err:
+                last_error = parse_err
+                logger.warning(f"Compliance attempt {attempt}/3 failed: {parse_err}")
+                if attempt < 3:
+                    await asyncio.sleep(2 * attempt)
+        else:
+            raise RuntimeError(f"Compliance failed after 3 attempts: {last_error}")
 
         compliance_output = ComplianceOutput(
             approved=result.approved,

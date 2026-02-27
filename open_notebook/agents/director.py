@@ -1,5 +1,6 @@
 # director agent - analyzes content and creates strategic podcast outline
 
+import asyncio
 from typing import Any, Dict
 
 from ai_prompter import Prompter
@@ -10,6 +11,8 @@ from pydantic import BaseModel, Field
 from open_notebook.domain.agentic_podcast import DirectorOutput, OutlineSegment
 from open_notebook.graphs.utils import provision_langchain_model
 from open_notebook.utils import clean_thinking_content
+
+MAX_RETRIES = 3
 
 
 class PodcastOutline(BaseModel):
@@ -53,15 +56,35 @@ async def director_agent(
         )
 
         logger.debug("calling ai model for outline")
-        ai_message = await model.ainvoke(system_prompt)
 
-        content_text = (
-            ai_message.content
-            if isinstance(ai_message.content, str)
-            else str(ai_message.content)
-        )
-        cleaned = clean_thinking_content(content_text)
-        outline = parser.parse(cleaned)
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                ai_message = await model.ainvoke(system_prompt)
+
+                content_text = (
+                    ai_message.content
+                    if isinstance(ai_message.content, str)
+                    else str(ai_message.content)
+                )
+                cleaned = clean_thinking_content(content_text)
+
+                if not cleaned or not cleaned.strip():
+                    raise ValueError("Model returned empty content")
+
+                outline = parser.parse(cleaned)
+                break  # success
+            except Exception as parse_err:
+                last_error = parse_err
+                logger.warning(
+                    f"Director attempt {attempt}/{MAX_RETRIES} failed: {parse_err}"
+                )
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(2 * attempt)
+        else:
+            raise RuntimeError(
+                f"Director failed after {MAX_RETRIES} attempts: {last_error}"
+            )
 
         director_output = DirectorOutput(
             reasoning=outline.reasoning,

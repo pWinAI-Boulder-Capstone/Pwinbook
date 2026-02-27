@@ -1,5 +1,6 @@
 # writer agent - generates natural dialogue for podcast segments
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from ai_prompter import Prompter
@@ -85,15 +86,31 @@ async def writer_agent(
         )
 
         logger.debug(f"calling ai model for segment {segment_index} transcript")
-        ai_message = await model.ainvoke(system_prompt)
 
-        content_text = (
-            ai_message.content
-            if isinstance(ai_message.content, str)
-            else str(ai_message.content)
-        )
-        cleaned = clean_thinking_content(content_text)
-        transcript_data = parser.parse(cleaned)
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                ai_message = await model.ainvoke(system_prompt)
+
+                content_text = (
+                    ai_message.content
+                    if isinstance(ai_message.content, str)
+                    else str(ai_message.content)
+                )
+                cleaned = clean_thinking_content(content_text)
+
+                if not cleaned or not cleaned.strip():
+                    raise ValueError("Model returned empty content")
+
+                transcript_data = parser.parse(cleaned)
+                break
+            except Exception as parse_err:
+                last_error = parse_err
+                logger.warning(f"Writer segment {segment_index} attempt {attempt}/3 failed: {parse_err}")
+                if attempt < 3:
+                    await asyncio.sleep(2 * attempt)
+        else:
+            raise RuntimeError(f"Writer failed after 3 attempts: {last_error}")
         writer_output = WriterOutput(
             segment_index=segment_index,
             segment_name=segment.name,
