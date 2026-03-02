@@ -107,10 +107,21 @@ type TranscriptEntry = {
   speaker?: string
   dialogue?: string
   text?: string
+  citation?: string
+  pacing_cue?: string
+  pronunciation_notes?: string
 }
 
 type TranscriptData = {
   transcript?: TranscriptEntry[]
+  audio_error?: string
+  audio_skipped?: string
+  duration_info?: {
+    valid?: boolean
+    duration_minutes?: number
+    target_range_minutes?: [number, number]
+    warning?: string
+  }
 }
 
 function extractOutlineSegments(outline: unknown): OutlineSegment[] {
@@ -142,6 +153,19 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
 
   const outlineSegments = useMemo(() => extractOutlineSegments(episode.outline), [episode.outline])
   const transcriptEntries = useMemo(() => extractTranscriptEntries(episode.transcript), [episode.transcript])
+
+  // Extract audio metadata from transcript object
+  const transcriptMeta = useMemo(() => {
+    if (episode.transcript && typeof episode.transcript === 'object') {
+      const data = episode.transcript as TranscriptData
+      return {
+        audioError: data.audio_error,
+        audioSkipped: data.audio_skipped,
+        durationInfo: data.duration_info,
+      }
+    }
+    return {}
+  }, [episode.transcript])
 
   useEffect(() => {
     let revokeUrl: string | undefined
@@ -246,6 +270,39 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
                     <audio controls preload="none" src={audioSrc} className="w-full" />
                   ) : audioError ? (
                     <p className="text-sm text-destructive">{audioError}</p>
+                  ) : transcriptMeta.audioError ? (
+                    <div className="rounded border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                      <p className="font-semibold">Audio Generation Failed</p>
+                      <p className="text-xs mt-1">{transcriptMeta.audioError}</p>
+                    </div>
+                  ) : transcriptMeta.audioSkipped ? (
+                    <div className="rounded border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700">
+                      <p className="font-semibold">Audio Skipped</p>
+                      <p className="text-xs mt-1">
+                        {transcriptMeta.audioSkipped === 'compliance_rejected'
+                          ? 'Compliance review rejected the transcript. Audio was not generated.'
+                          : transcriptMeta.audioSkipped}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {transcriptMeta.durationInfo ? (
+                    <div className={`rounded border p-2 text-xs ${
+                      transcriptMeta.durationInfo.valid
+                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700'
+                        : 'border-amber-500/30 bg-amber-500/5 text-amber-700'
+                    }`}>
+                      <span className="font-semibold">Duration:</span>{' '}
+                      {transcriptMeta.durationInfo.duration_minutes?.toFixed(1)} min
+                      {transcriptMeta.durationInfo.target_range_minutes ? (
+                        <span className="text-muted-foreground">
+                          {' '}(target: {transcriptMeta.durationInfo.target_range_minutes[0]}-{transcriptMeta.durationInfo.target_range_minutes[1]} min)
+                        </span>
+                      ) : null}
+                      {transcriptMeta.durationInfo.warning ? (
+                        <p className="mt-1 text-[10px]">{transcriptMeta.durationInfo.warning}</p>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   <Tabs defaultValue="summary" className="h-[60vh] flex flex-col">
@@ -350,9 +407,26 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
                       <ScrollArea className="h-full pr-4 space-y-3">
                         {transcriptEntries.length > 0 ? (
                           transcriptEntries.map((entry, index) => (
-                            <div key={index} className="rounded border bg-muted/20 p-3 text-xs space-y-1">
-                              <p className="font-semibold text-foreground">{entry.speaker ?? 'Speaker'}</p>
+                            <div key={index} className="rounded border bg-muted/20 p-3 text-xs space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-foreground">{entry.speaker ?? 'Speaker'}</p>
+                                {entry.pacing_cue ? (
+                                  <span className="text-[10px] italic text-muted-foreground/70 shrink-0">
+                                    [{entry.pacing_cue}]
+                                  </span>
+                                ) : null}
+                              </div>
                               <p className="text-muted-foreground whitespace-pre-wrap">{entry.dialogue ?? entry.text ?? ''}</p>
+                              {entry.citation ? (
+                                <p className="text-[10px] text-blue-400/80">
+                                  <span className="font-semibold">Cite:</span> {entry.citation}
+                                </p>
+                              ) : null}
+                              {entry.pronunciation_notes ? (
+                                <p className="text-[10px] text-amber-400/70">
+                                  <span className="font-semibold">Pronunciation:</span> {entry.pronunciation_notes}
+                                </p>
+                              ) : null}
                             </div>
                           ))
                         ) : (
@@ -393,6 +467,10 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
           <audio controls preload="none" src={audioSrc} className="w-full" />
         ) : audioError ? (
           <p className="text-sm text-destructive">{audioError}</p>
+        ) : transcriptMeta.audioError ? (
+          <div className="rounded border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
+            <span className="font-semibold">Audio failed:</span> {transcriptMeta.audioError}
+          </div>
         ) : null}
       </CardContent>
     </Card>

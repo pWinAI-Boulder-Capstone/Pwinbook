@@ -34,6 +34,9 @@ As the Compliance Agent, you are responsible for:
 <transcript>
 {% for line in transcript %}
 **{{ line.speaker }}**: {{ line.dialogue }}
+  _Citation_: {{ line.citation }}
+  _Pacing_: {{ line.pacing_cue }}
+  {% if line.pronunciation_notes %}_Pronunciation_: {{ line.pronunciation_notes }}{% endif %}
 {% endfor %}
 </transcript>
 
@@ -65,6 +68,13 @@ Perform a comprehensive compliance check on the transcript and determine whether
 - Scientific claims should reflect consensus or note controversy
 - Historical facts should be accurate
 - No conspiracy theories presented as fact
+
+### 3. Citation Completeness (Critical — Auto-Reject)
+- EVERY dialogue line MUST have a non-empty citation field
+- If ANY dialogue line has an empty or missing citation, the transcript MUST be REJECTED (approved = false)
+- Citations must reference specific parts of the source content (section title, paragraph topic, key phrase)
+- Vague citations like "general knowledge" or "common sense" are NOT acceptable — they must trace back to the provided source content
+- Count the number of lines with missing citations and report it in the flags
 
 ### 3. Professional Responsibility
 - Medical information includes appropriate disclaimers (e.g., "consult your doctor")
@@ -114,6 +124,10 @@ Provide your response in the following JSON structure:
         "misinformation": {
             "passed": true,
             "notes": "Brief assessment"
+        },
+        "citation_completeness": {
+            "passed": true,
+            "notes": "All N lines have valid citations referencing source content"
         },
         "professional_responsibility": {
             "passed": true,

@@ -34,9 +34,6 @@ class ReviewResult(BaseModel):
         default_factory=list, description="List of issues found"
     )
     summary: str = Field(description="Brief overall assessment")
-    revised_transcript: List[TranscriptLine] = Field(
-        description="Revised and improved transcript"
-    )
 
 
 async def reviewer_agent(
@@ -107,13 +104,12 @@ async def reviewer_agent(
             scores=review.scores,
             issues=[i.model_dump() for i in review.issues],
             summary=review.summary,
-            revised_transcript=review.revised_transcript,
+            revised_transcript=transcript,  # pass through original transcript
         )
 
         logger.info(
             f"reviewer done: score={review.overall_score}, "
-            f"issues={len(review.issues)}, "
-            f"revised_turns={len(review.revised_transcript)}"
+            f"issues={len(review.issues)}"
         )
         return reviewer_output
 

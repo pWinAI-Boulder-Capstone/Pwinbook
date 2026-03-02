@@ -23,6 +23,33 @@ class PodcastGenerationRequest(BaseModel):
     content: Optional[str] = None
     notebook_id: Optional[str] = None
     briefing_suffix: Optional[str] = None
+    podcast_length: Optional[str] = None  # 'short', 'medium', 'long'
+
+
+# Podcast length presets
+# TTS generates ~150 words/minute, so we set total word budgets
+# to achieve deterministic audio durations.
+# target_words_per_turn controls how verbose each dialogue line is.
+PODCAST_LENGTH_PRESETS = {
+    "short": {
+        "max_turns": 8,
+        "num_segments": 3,
+        "target_duration_minutes": 3,
+        "target_words_per_turn": 35,
+    },
+    "medium": {
+        "max_turns": 12,
+        "num_segments": 4,
+        "target_duration_minutes": 7,
+        "target_words_per_turn": 40,
+    },
+    "long": {
+        "max_turns": 15,
+        "num_segments": 5,
+        "target_duration_minutes": 12,
+        "target_words_per_turn": 45,
+    },
+}
 
 
 class PodcastGenerationResponse(BaseModel):
@@ -40,6 +67,7 @@ async def _run_workflow_background(
     workflow_request: AgenticWorkflowRequest,
     episode_profile: EpisodeProfile,
     speaker_profile: SpeakerProfile,
+    podcast_length: str = "medium",
 ) -> None:
     """Run the multi-agent workflow in background and update the PodcastEpisode when done."""
     try:
@@ -63,11 +91,17 @@ async def _run_workflow_background(
             return
 
         # build transcript from workflow — format must match frontend expectations:
-        # { "transcript": [{speaker: string, dialogue: string}, ...] }
+        # { "transcript": [{speaker, dialogue, citation, pacing_cue, pronunciation_notes}, ...] }
         transcript_lines = workflow.get_full_transcript()
         episode.transcript = {
             "transcript": [
-                {"speaker": line.speaker, "dialogue": line.dialogue}
+                {
+                    "speaker": line.speaker,
+                    "dialogue": line.dialogue,
+                    "citation": line.citation,
+                    "pacing_cue": line.pacing_cue,
+                    "pronunciation_notes": line.pronunciation_notes,
+                }
                 for line in transcript_lines
             ],
             "workflow_id": response.workflow_id,
@@ -129,21 +163,24 @@ async def _run_workflow_background(
                     s["name"]: s["voice_id"] for s in speaker_profile.speakers
                 }
 
-                final_audio_path = await generate_audio_from_transcript(
+                final_audio_path, duration_info = await generate_audio_from_transcript(
                     transcript=transcript_lines,
                     episode_name=workflow_request.episode_name,
                     tts_provider=speaker_profile.tts_provider,
                     tts_model=speaker_profile.tts_model,
                     voice_mapping=voice_mapping,
+                    podcast_length=podcast_length,
                 )
 
                 episode.audio_file = str(final_audio_path)
+                episode.transcript["duration_info"] = duration_info
                 episode.job_status_override = "completed"
                 await episode.save()
 
                 logger.info(
                     f"Audio generation complete for episode {episode_id}: "
-                    f"{final_audio_path}"
+                    f"{final_audio_path} "
+                    f"({duration_info.get('duration_minutes', '?')} min)"
                 )
 
             except Exception as audio_err:
@@ -188,6 +225,7 @@ class PodcastService:
         notebook_id: Optional[str] = None,
         content: Optional[str] = None,
         briefing_suffix: Optional[str] = None,
+        podcast_length: Optional[str] = None,
     ) -> str:
         """Submit a podcast generation job using the new multi-agent workflow.
         
@@ -196,6 +234,12 @@ class PodcastService:
         Returns the episode ID so the frontend can poll for status.
         """
         try:
+            # Resolve podcast length preset
+            length_preset = PODCAST_LENGTH_PRESETS.get(
+                podcast_length or "medium",
+                PODCAST_LENGTH_PRESETS["medium"],
+            )
+
             # Validate profiles exist
             episode_profile = await EpisodeProfile.get_by_name(episode_profile_name)
             if not episode_profile:
@@ -232,7 +276,13 @@ class PodcastService:
             await episode.save()
             episode_id = str(episode.id)
 
-            logger.info(f"Created episode {episode_id} for '{episode_name}', launching background workflow")
+            logger.info(
+                f"Created episode {episode_id} for '{episode_name}' "
+                f"(length={podcast_length or 'medium'}, "
+                f"segments={length_preset['num_segments']}, "
+                f"max_turns={length_preset['max_turns']}, "
+                f"~{length_preset['target_duration_minutes']} min target)"
+            )
 
             # Build the agentic workflow request
             workflow_request = AgenticWorkflowRequest(
@@ -241,12 +291,17 @@ class PodcastService:
                 content=content,
                 notebook_id=notebook_id,
                 briefing_suffix=briefing_suffix,
+                max_turns=length_preset["max_turns"],
+                num_segments=length_preset["num_segments"],
+                target_words_per_turn=length_preset["target_words_per_turn"],
+                target_duration_minutes=length_preset["target_duration_minutes"],
             )
 
             # Launch workflow in background — returns immediately
             task = asyncio.create_task(
                 _run_workflow_background(
-                    episode_id, workflow_request, episode_profile, speaker_profile
+                    episode_id, workflow_request, episode_profile, speaker_profile,
+                    podcast_length=podcast_length or "medium",
                 )
             )
             _running_workflows[episode_id] = task

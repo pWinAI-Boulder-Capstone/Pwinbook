@@ -29,6 +29,15 @@ class AgenticWorkflowRequest(BaseModel):
     num_segments: Optional[int] = Field(
         default=None, description="Number of segments (uses profile default if not specified)"
     )
+    max_turns: Optional[int] = Field(
+        default=None, description="Maximum turns per segment (controls podcast length)"
+    )
+    target_words_per_turn: Optional[int] = Field(
+        default=None, description="Target words per dialogue turn for duration control"
+    )
+    target_duration_minutes: Optional[int] = Field(
+        default=None, description="Target podcast duration in minutes"
+    )
 
 
 class AgenticWorkflowResponse(BaseModel):
@@ -215,6 +224,9 @@ class AgenticPodcastService:
                     episode_profile_name=episode_profile.name,
                     speaker_profile_name=speaker_profile.name,
                     num_segments=num_segments,
+                    max_turns=getattr(request, 'max_turns', 20) or 20,
+                    target_words_per_turn=getattr(request, 'target_words_per_turn', None),
+                    target_duration_minutes=getattr(request, 'target_duration_minutes', None),
                     outline_model=episode_profile.outline_model,
                     transcript_model=episode_profile.transcript_model,
                     reviewer_model=getattr(episode_profile, 'reviewer_model', None),

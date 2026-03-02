@@ -81,6 +81,7 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
   const [episodeProfileId, setEpisodeProfileId] = useState<string>('')
   const [episodeName, setEpisodeName] = useState('')
   const [instructions, setInstructions] = useState('')
+  const [podcastLength, setPodcastLength] = useState<'short' | 'medium' | 'long'>('medium')
 
   const [isBuildingContext, setIsBuildingContext] = useState(false)
   const [tokenCount, setTokenCount] = useState<number>(0)
@@ -463,6 +464,7 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
         episode_name: episodeName.trim(),
         content,
         briefing_suffix: instructions.trim() ? instructions.trim() : undefined,
+        podcast_length: podcastLength,
       }
 
       await generatePodcast.mutateAsync(payload)
@@ -786,6 +788,20 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
                       onChange={(event) => setEpisodeName(event.target.value)}
                       placeholder="e.g., AI and the Future of Work"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="podcast_length">Podcast length</Label>
+                    <Select value={podcastLength} onValueChange={(v) => setPodcastLength(v as 'short' | 'medium' | 'long')}>
+                      <SelectTrigger id="podcast_length">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">Short (~3 min)</SelectItem>
+                        <SelectItem value="medium">Medium (~7 min)</SelectItem>
+                        <SelectItem value="long">Long (~12 min)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">

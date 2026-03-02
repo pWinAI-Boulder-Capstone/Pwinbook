@@ -34,18 +34,33 @@ async def writer_agent(
     model_name: Optional[str] = None,
     min_turns: int = 10,
     max_turns: int = 30,
+    target_words_per_turn: Optional[int] = None,
+    target_duration_minutes: Optional[int] = None,
+    num_segments: int = 5,
 ) -> WriterOutput:
     """generates natural conversation for a segment, keeping speaker personalities consistent"""
     logger.info(f"writer starting segment {segment_index}: '{segment.name}'")
 
     try:
-        # figure out how many turns based on segment size
+        # figure out how many turns based on segment size, capped by max_turns
         if segment.size == "short":
-            target_turns = min(max(min_turns, 8), 15)
+            target_turns = min(max(min_turns, 8), 15, max_turns)
         elif segment.size == "medium":
-            target_turns = min(max(min_turns, 15), 25)
+            target_turns = min(max(min_turns, 15), 25, max_turns)
         else:
             target_turns = min(max(min_turns, 20), max_turns)
+
+        # Calculate word budget for this segment
+        # TTS generates ~150 words/minute, so total_words ≈ duration_min × 150
+        words_per_turn = target_words_per_turn or 40
+        segment_word_budget = target_turns * words_per_turn
+
+        if target_duration_minutes and num_segments > 0:
+            # Distribute total word budget evenly across segments
+            total_word_budget = target_duration_minutes * 150
+            segment_word_budget = total_word_budget // num_segments
+            # Adjust target_turns to fit the word budget
+            target_turns = max(4, segment_word_budget // words_per_turn)
 
         # grab context from previous segments if we have them
         previous_transcript_text = None
@@ -62,6 +77,9 @@ async def writer_agent(
             "segment_index": segment_index,
             "segment_size": segment.size,
             "target_turns": target_turns,
+            "words_per_turn": words_per_turn,
+            "segment_word_budget": segment_word_budget,
+            "target_duration_minutes": target_duration_minutes,
             "briefing": briefing,
             "content": content,
             "speakers": speakers,
@@ -71,6 +89,11 @@ async def writer_agent(
             "is_first_segment": segment_index == 0,
             "is_last_segment": segment_index == len(outline_segments) - 1,
         }
+
+        logger.info(
+            f"writer segment {segment_index}: target_turns={target_turns}, "
+            f"words_per_turn={words_per_turn}, word_budget={segment_word_budget}"
+        )
 
         parser = PydanticOutputParser(pydantic_object=SegmentTranscript)
         system_prompt = Prompter(prompt_template="agents/writer", parser=parser).render(
@@ -85,21 +108,52 @@ async def writer_agent(
             structured={"type": "json"},
         )
 
-        logger.debug(f"calling ai model for segment {segment_index} transcript")
+        logger.info(f"calling ai model for segment {segment_index} transcript")
 
         last_error = None
         for attempt in range(1, 4):
             try:
-                ai_message = await model.ainvoke(system_prompt)
+                # On retry, append a stronger instruction to skip thinking
+                invoke_prompt = system_prompt
+                if attempt > 1:
+                    invoke_prompt = (
+                        system_prompt
+                        + "\n\nIMPORTANT: Output ONLY the JSON object. "
+                        "Do NOT include any reasoning, thinking, or explanation. "
+                        "Start your response with {\"transcript\": ["
+                    )
+
+                ai_message = await model.ainvoke(invoke_prompt)
 
                 content_text = (
                     ai_message.content
                     if isinstance(ai_message.content, str)
                     else str(ai_message.content)
                 )
+
+                # Log raw content info at INFO level so it's always visible
+                raw_len = len(content_text) if content_text else 0
+                logger.info(
+                    f"Writer segment {segment_index} attempt {attempt}: "
+                    f"raw response length={raw_len}"
+                )
+                if raw_len > 0 and raw_len < 300:
+                    logger.info(f"Writer segment {segment_index} raw content: {content_text!r}")
+                elif raw_len > 0:
+                    logger.info(
+                        f"Writer segment {segment_index} raw preview: "
+                        f"{content_text[:150]!r}...{content_text[-100:]!r}"
+                    )
+
                 cleaned = clean_thinking_content(content_text)
 
                 if not cleaned or not cleaned.strip():
+                    # Check if model spent all tokens on thinking
+                    if content_text and "<think>" in content_text.lower():
+                        logger.warning(
+                            f"Writer segment {segment_index}: model used all tokens on "
+                            f"<think> reasoning ({raw_len} chars), no JSON output produced"
+                        )
                     raise ValueError("Model returned empty content")
 
                 transcript_data = parser.parse(cleaned)

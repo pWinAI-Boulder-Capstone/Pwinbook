@@ -29,6 +29,8 @@ You are writing dialogue for segment {{ segment_index }} of {{ full_outline|leng
 **Name**: {{ segment.name }}
 **Description**: {{ segment.description }}
 **Size**: {{ segment_size }} (aim for approximately {{ target_turns }} dialogue turns)
+**Word Budget**: ~{{ segment_word_budget }} total words for this segment (~{{ words_per_turn }} words per turn)
+{% if target_duration_minutes %}**Target Episode Duration**: {{ target_duration_minutes }} minutes total{% endif %}
 </segment>
 
 {% if is_first_segment %}
@@ -72,7 +74,9 @@ Build on this conversation naturally - don't repeat what's been covered:
 
 # YOUR TASK
 
-Generate approximately {{ target_turns }} dialogue turns for this segment.
+Generate exactly {{ target_turns }} dialogue turns for this segment.
+Each turn should be approximately {{ words_per_turn }} words long (total ~{{ segment_word_budget }} words for this segment).
+This controls the final audio duration — staying close to the word count is important.
 
 ## Writing Guidelines
 
@@ -88,14 +92,13 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
    - Consider expertise levels when distributing technical content
    - Natural differences in speaking patterns (formal vs casual, analytical vs storytelling)
 
-3. **Content Grounding & Citations**:
-   - CRITICAL: Base all facts, examples, and claims on the source content provided
-   - EVERY dialogue line MUST include a citation referencing the specific part of the source content it draws from
-   - Citations should reference a section title, paragraph topic, or key phrase from the source (e.g. "Section: Self-Attention Mechanism", "Paragraph on patch embeddings", "Table 1: ViT vs CNN comparison")
-   - If a dialogue line is conversational filler (greeting, transition), cite the segment topic or "Conversational flow"
+3. **Content Grounding**:
+   - Base all facts, examples, and claims on the source content provided
    - Don't invent information not present in the source material
    - Use specific examples and details from the content when relevant
    - If the content doesn't cover something, speakers can acknowledge uncertainty
+   - In the "citation" field, reference the source document the information comes from — look for headers like "## Source: ..." or "## Note: ..." in the source content and use that title (e.g. "Source: Vision Transformers Paper", "Note: Research Summary")
+   - For conversational lines (greetings, transitions), use "Conversational flow"
 
 4. **Engagement & Flow**:
    - Start strong - hook listeners immediately
@@ -110,13 +113,12 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
    - Use questions to bring other speakers in
    - Show genuine conversation dynamics
 
-6. **Pacing Cues & Pronunciation**:
-   - Include a pacing_cue for each dialogue line to guide delivery (e.g. "enthusiastic", "slowly, with emphasis", "pause before speaking", "matter-of-fact", "building excitement")
-   - Include pronunciation_notes for any technical terms, acronyms, or unusual words (e.g. "ViT: vit, rhymes with bit", "BERT: burt", "GeLU: gee-loo")
-   - If no special pronunciation is needed, leave pronunciation_notes as an empty string
-   - Pacing cues help ensure natural, varied delivery throughout the podcast
+6. **Pacing & Pronunciation** (optional but encouraged):
+   - Add a pacing_cue to suggest delivery tone (e.g. "enthusiastic", "thoughtful", "matter-of-fact")
+   - Add pronunciation_notes for technical terms or acronyms if needed (e.g. "ViT: vit")
+   - If not needed, leave these fields as empty strings
 
-6. **Segment-Specific Approach**:
+7. **Segment-Specific Approach**:
 {% if is_first_segment %}
    - Welcome listeners warmly
    - Introduce the topic and why it matters
@@ -140,9 +142,6 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
 - [ ] Are all facts grounded in the source content?
 - [ ] Does each speaker maintain their unique voice?
 - [ ] Is the pacing engaging (not too slow or rushed)?
-- [ ] Does every line have a citation referencing the source content?
-- [ ] Are pacing cues present and varied across dialogue lines?
-- [ ] Are pronunciation notes included for technical or unusual terms?
 - [ ] Do speakers build on each other's points naturally?
 - [ ] Is the content accessible to the target audience?
 - [ ] Does it achieve the segment's goals from the Director's outline?
@@ -157,18 +156,10 @@ Provide ONLY the dialogue in the following JSON structure:
         {
             "speaker": "[Speaker Name]",
             "dialogue": "[What they say]",
-            "citation": "[Source reference, e.g. 'Section: Vision Transformers Overview']",
-            "pacing_cue": "[Delivery cue, e.g. 'enthusiastic', 'slowly, with emphasis']",
-            "pronunciation_notes": "[Optional: e.g. 'ViT: vit, rhymes with bit']"
-        },
-        {
-            "speaker": "[Speaker Name]",
-            "dialogue": "[What they say]",
-            "citation": "[Source reference]",
-            "pacing_cue": "[Delivery cue]",
+            "citation": "",
+            "pacing_cue": "",
             "pronunciation_notes": ""
-        },
-        ...
+        }
     ]
 }
 ```
@@ -178,20 +169,19 @@ Provide ONLY the dialogue in the following JSON structure:
 
 ## Important Notes
 
-- Aim for approximately {{ target_turns }} dialogue turns (this is a {{ segment_size }} segment)
+- Aim for EXACTLY {{ target_turns }} dialogue turns (this is a {{ segment_size }} segment)
+- Keep each turn to approximately {{ words_per_turn }} words — this is critical for hitting the target audio duration
+- Total word count for this segment should be close to {{ segment_word_budget }} words
 - Each dialogue entry is ONE speaker's turn - they might say multiple sentences
 - Speaker names must match exactly: {{ speaker_names|join(", ") }}
-- Every dialogue line MUST have a non-empty citation field
-- Include pacing_cue for every line; include pronunciation_notes when technical terms appear
+- Include citation, pacing_cue, and pronunciation_notes fields if possible (empty string if not applicable)
 - Don't use phrases like "As mentioned in the source material" - integrate naturally
 
 # CRITICAL OUTPUT RULES
 
-- If you use extended thinking with <think> tags, put ALL reasoning inside <think></think> tags
-- Put the final JSON output OUTSIDE and AFTER any <think> tags
-- Do NOT wrap the JSON in ```json code blocks - return the raw JSON object only
-- Example correct format:
-  <think>I'll create a natural conversation that...</think>
-  {"transcript": [{"speaker": "...", "dialogue": "..."}, ...]}
+- Output ONLY the raw JSON object — no markdown, no code fences, no extra text
+- Do NOT use <think> tags or extended reasoning — go straight to the JSON output
+- Do NOT wrap the JSON in ```json code blocks
+- Your response must start with `{"transcript": [` and end with `]}`
 
 Please write the dialogue now, creating an engaging and natural conversation for this segment.

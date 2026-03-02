@@ -111,6 +111,59 @@ async def compliance_agent(
             summary=result.summary,
         )
 
+        # --- Programmatic citation validation ---
+        # Track citation coverage for quality reporting.
+        # Missing citations are flagged as warnings but do not auto-reject
+        # the script, since citations are encouraged but not mandatory.
+        lines_missing_citation = []
+        for i, line in enumerate(transcript):
+            if not line.citation or not line.citation.strip():
+                lines_missing_citation.append(
+                    f"Line {i + 1} ({line.speaker}): missing citation"
+                )
+
+        citation_ratio = (
+            (len(transcript) - len(lines_missing_citation)) / len(transcript)
+            if transcript
+            else 1.0
+        )
+
+        if lines_missing_citation:
+            severity = "warning" if citation_ratio >= 0.5 else "critical"
+            passed = citation_ratio >= 0.5
+
+            compliance_output.checks["citation_completeness"] = {
+                "passed": passed,
+                "notes": (
+                    f"{len(lines_missing_citation)} of {len(transcript)} lines "
+                    f"missing citations ({citation_ratio:.0%} coverage)"
+                ),
+            }
+
+            compliance_output.flags.append({
+                "severity": severity,
+                "category": "citation_completeness",
+                "description": (
+                    f"{len(lines_missing_citation)} dialogue lines are missing "
+                    f"source citations ({citation_ratio:.0%} coverage)."
+                ),
+                "location": "; ".join(lines_missing_citation[:5])
+                + (f" ... and {len(lines_missing_citation) - 5} more" if len(lines_missing_citation) > 5 else ""),
+                "recommendation": "Consider adding source references to improve traceability.",
+            })
+
+            logger.info(
+                f"compliance: citation coverage {citation_ratio:.0%} — "
+                f"{len(lines_missing_citation)} lines without citations"
+            )
+        else:
+            # Ensure citation check is recorded as passed
+            if "citation_completeness" not in compliance_output.checks:
+                compliance_output.checks["citation_completeness"] = {
+                    "passed": True,
+                    "notes": f"All {len(transcript)} lines have citations",
+                }
+
         logger.info(
             f"compliance done: approved={result.approved}, "
             f"risk={result.overall_risk_level}, "

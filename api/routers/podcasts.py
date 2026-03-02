@@ -53,6 +53,7 @@ async def generate_podcast(request: PodcastGenerationRequest):
             notebook_id=request.notebook_id,
             content=request.content,
             briefing_suffix=request.briefing_suffix,
+            podcast_length=request.podcast_length,
         )
 
         return PodcastGenerationResponse(

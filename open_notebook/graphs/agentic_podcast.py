@@ -35,6 +35,9 @@ class AgenticPodcastState(TypedDict):
     episode_profile_name: str
     speaker_profile_name: str
     num_segments: int
+    max_turns: int
+    target_words_per_turn: Optional[int]
+    target_duration_minutes: Optional[int]
 
     # Model configuration
     outline_model: Optional[str]
@@ -65,6 +68,9 @@ class SegmentWriterState(TypedDict):
     outline_segments: List[OutlineSegment]
     previous_segments: List[WriterOutput]
     transcript_model: Optional[str]
+    max_turns: int
+    target_words_per_turn: Optional[int]
+    target_duration_minutes: Optional[int]
 
 
 async def run_director(
@@ -163,6 +169,9 @@ async def trigger_segment_writers(
                     "outline_segments": segments,
                     "previous_segments": [],  # Will be populated in sequential mode
                     "transcript_model": state.get("transcript_model"),
+                    "max_turns": state.get("max_turns", 20),
+                    "target_words_per_turn": state.get("target_words_per_turn"),
+                    "target_duration_minutes": state.get("target_duration_minutes"),
                 },
             )
         )
@@ -206,6 +215,10 @@ async def write_segment(
             outline_segments=state["outline_segments"],
             previous_segments=previous_segments if previous_segments else None,
             model_name=state.get("transcript_model"),
+            max_turns=state.get("max_turns", 20),
+            target_words_per_turn=state.get("target_words_per_turn"),
+            target_duration_minutes=state.get("target_duration_minutes"),
+            num_segments=len(state["outline_segments"]),
         )
 
         logger.info(
@@ -482,6 +495,9 @@ async def run_agentic_podcast_workflow(
     episode_profile_name: str,
     speaker_profile_name: str,
     num_segments: int = 5,
+    max_turns: int = 20,
+    target_words_per_turn: Optional[int] = None,
+    target_duration_minutes: Optional[int] = None,
     outline_model: Optional[str] = None,
     transcript_model: Optional[str] = None,
     reviewer_model: Optional[str] = None,
@@ -499,6 +515,9 @@ async def run_agentic_podcast_workflow(
         episode_profile_name: Name of episode profile
         speaker_profile_name: Name of speaker profile
         num_segments: Number of segments to create (default: 5)
+        max_turns: Max dialogue turns per segment (default: 20)
+        target_words_per_turn: Target words per turn for duration control
+        target_duration_minutes: Target podcast duration in minutes
         outline_model: Optional model override for Director
         transcript_model: Optional model override for Writer
         reviewer_model: Optional model override for Reviewer
@@ -524,6 +543,9 @@ async def run_agentic_podcast_workflow(
         "episode_profile_name": episode_profile_name,
         "speaker_profile_name": speaker_profile_name,
         "num_segments": num_segments,
+        "max_turns": max_turns,
+        "target_words_per_turn": target_words_per_turn,
+        "target_duration_minutes": target_duration_minutes,
         "outline_model": outline_model,
         "transcript_model": transcript_model,
         "reviewer_model": reviewer_model,
