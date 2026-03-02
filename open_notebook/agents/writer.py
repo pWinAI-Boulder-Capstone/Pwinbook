@@ -42,25 +42,32 @@ async def writer_agent(
     logger.info(f"writer starting segment {segment_index}: '{segment.name}'")
 
     try:
-        # figure out how many turns based on segment size, capped by max_turns
-        if segment.size == "short":
-            target_turns = min(max(min_turns, 8), 15, max_turns)
-        elif segment.size == "medium":
-            target_turns = min(max(min_turns, 15), 25, max_turns)
-        else:
-            target_turns = min(max(min_turns, 20), max_turns)
-
-        # Calculate word budget for this segment
-        # TTS generates ~150 words/minute, so total_words ≈ duration_min × 150
+        # Effective TTS rate ~120 wpm (accounts for inter-speaker pauses)
+        EFFECTIVE_WPM = 120
         words_per_turn = target_words_per_turn or 40
-        segment_word_budget = target_turns * words_per_turn
 
         if target_duration_minutes and num_segments > 0:
-            # Distribute total word budget evenly across segments
-            total_word_budget = target_duration_minutes * 150
+            # Duration-based calculation takes priority when set
+            total_word_budget = target_duration_minutes * EFFECTIVE_WPM
             segment_word_budget = total_word_budget // num_segments
-            # Adjust target_turns to fit the word budget
-            target_turns = max(4, segment_word_budget // words_per_turn)
+            target_turns = max(6, segment_word_budget // words_per_turn)
+            # Recalculate budget to match turn count
+            segment_word_budget = target_turns * words_per_turn
+        else:
+            # Fallback: use segment size hints
+            if segment.size == "short":
+                target_turns = min(max(8, min_turns), 15, max_turns)
+            elif segment.size == "medium":
+                target_turns = min(max(15, min_turns), 25, max_turns)
+            else:
+                target_turns = min(max(20, min_turns), max_turns)
+            segment_word_budget = target_turns * words_per_turn
+
+        # Enforce minimum word budget per segment (prevents ultra-short output)
+        MIN_SEGMENT_WORDS = 250
+        if segment_word_budget < MIN_SEGMENT_WORDS:
+            segment_word_budget = MIN_SEGMENT_WORDS
+            target_turns = max(target_turns, segment_word_budget // words_per_turn)
 
         # grab context from previous segments if we have them
         previous_transcript_text = None
@@ -104,7 +111,7 @@ async def writer_agent(
             system_prompt,
             model_name,
             "tools",
-            max_tokens=4000,
+            max_tokens=8192,
             structured={"type": "json"},
         )
 

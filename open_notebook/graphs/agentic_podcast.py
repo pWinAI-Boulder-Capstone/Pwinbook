@@ -6,7 +6,6 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Send
 from loguru import logger
 from typing_extensions import TypedDict
 
@@ -56,21 +55,7 @@ class AgenticPodcastState(TypedDict):
     errors: Annotated[List[str], operator.add]
 
 
-class SegmentWriterState(TypedDict):
-    """state for individual segment writer (sub-graph)"""
 
-    workflow_id: str
-    segment: OutlineSegment
-    segment_index: int
-    content: str
-    briefing: str
-    speakers: List[Dict[str, Any]]
-    outline_segments: List[OutlineSegment]
-    previous_segments: List[WriterOutput]
-    transcript_model: Optional[str]
-    max_turns: int
-    target_words_per_turn: Optional[int]
-    target_duration_minutes: Optional[int]
 
 
 async def run_director(
@@ -129,114 +114,90 @@ async def run_director(
         }
 
 
-async def trigger_segment_writers(
+async def run_writers_sequential(
     state: AgenticPodcastState, config: RunnableConfig
-) -> List[Send]:
-    """fan out to multiple segment writer nodes
+) -> Dict[str, Any]:
+    """run all segment writers sequentially so each segment has context from previous ones
 
-    thhis creates a separate writer task for each segment in the outline,
-    allowing parallel transcript generation.
+    This replaces the parallel fan-out approach to ensure proper conversational
+    flow between segments — each writer sees the actual output of prior segments.
 
     Args:
         state: Current workflow state
         config: Runnable configuration
 
     Returns:
-        List of Send objects, one per segment
+        updated state with all writer_outputs
     """
     if not state.get("director_output"):
-        logger.error("No director output available for writer fan-out")
-        return []
+        logger.error("No director output available for writers")
+        return {"errors": ["No director output"], "current_stage": "failed"}
 
     director_output = state["director_output"]
     segments = director_output.segments
 
-    logger.info(f"Triggering {len(segments)} segment writers")
+    logger.info(f"Running {len(segments)} segment writers sequentially")
 
-    # Create a Send for each segment
-    sends = []
+    all_outputs: List[WriterOutput] = []
+    errors: List[str] = []
+
     for i, segment in enumerate(segments):
-        sends.append(
-            Send(
-                "write_segment",
-                {
-                    "workflow_id": state["workflow_id"],
-                    "segment": segment,
-                    "segment_index": i,
-                    "content": state["content"],
-                    "briefing": state["briefing"],
-                    "speakers": state["speakers"],
-                    "outline_segments": segments,
-                    "previous_segments": [],  # Will be populated in sequential mode
-                    "transcript_model": state.get("transcript_model"),
-                    "max_turns": state.get("max_turns", 20),
-                    "target_words_per_turn": state.get("target_words_per_turn"),
-                    "target_duration_minutes": state.get("target_duration_minutes"),
-                },
+        logger.info(f"Writing segment {i}/{len(segments)}: '{segment.name}'")
+
+        try:
+            # Pass actual previous outputs for context
+            previous_segments = all_outputs if all_outputs else None
+
+            writer_output = await writer_agent(
+                segment=segment,
+                segment_index=i,
+                content=state["content"],
+                briefing=state["briefing"],
+                speakers=state["speakers"],
+                outline_segments=segments,
+                previous_segments=previous_segments,
+                model_name=state.get("transcript_model"),
+                max_turns=state.get("max_turns", 20),
+                target_words_per_turn=state.get("target_words_per_turn"),
+                target_duration_minutes=state.get("target_duration_minutes"),
+                num_segments=len(segments),
             )
-        )
 
-    return sends
+            all_outputs.append(writer_output)
 
+            logger.info(
+                f"Writer completed segment {i}: {len(writer_output.transcript)} turns"
+            )
 
-async def write_segment(
-    state: SegmentWriterState, config: RunnableConfig
-) -> Dict[str, Any]:
-    """execute the Writer agent for a single segment
+            # Save progress to workflow DB after each segment
+            try:
+                workflow = await AgenticPodcastWorkflow.get(state["workflow_id"])
+                workflow.set_writer_outputs(all_outputs)
+                await workflow.save()
+                logger.info(f"Saved progress: {len(all_outputs)}/{len(segments)} segments written")
+            except Exception as save_err:
+                logger.warning(f"Could not save segment progress: {save_err}")
 
-    Args:
-        state: Segment writer state
-        config: Runnable configuration
+        except Exception as e:
+            error_msg = f"Writer agent failed for segment {i}: {str(e)}"
+            logger.error(error_msg)
+            logger.exception(e)
+            errors.append(error_msg)
 
-    Returns:
-        updated state with writer_output
-    """
-    segment_index = state["segment_index"]
-    segment = state["segment"]
-
-    logger.info(f"Running Writer agent for segment {segment_index}: '{segment.name}'")
-
-    try:
-        # Get workflow to check for previous segments
-        workflow = await AgenticPodcastWorkflow.get(state["workflow_id"])
-
-        # Get previously written segments for context (if any)
-        previous_outputs = workflow.get_writer_outputs() if workflow.writer_outputs else []
-        # Only use segments before this one
-        previous_segments = [w for w in previous_outputs if w.segment_index < segment_index]
-
-        # Run writer agent
-        writer_output = await writer_agent(
-            segment=segment,
-            segment_index=segment_index,
-            content=state["content"],
-            briefing=state["briefing"],
-            speakers=state["speakers"],
-            outline_segments=state["outline_segments"],
-            previous_segments=previous_segments if previous_segments else None,
-            model_name=state.get("transcript_model"),
-            max_turns=state.get("max_turns", 20),
-            target_words_per_turn=state.get("target_words_per_turn"),
-            target_duration_minutes=state.get("target_duration_minutes"),
-            num_segments=len(state["outline_segments"]),
-        )
-
-        logger.info(
-            f"Writer completed segment {segment_index}: {len(writer_output.transcript)} turns"
-        )
-
+    if not all_outputs:
         return {
-            "writer_outputs": [writer_output],
+            "errors": errors or ["All writers failed"],
+            "current_stage": "failed",
         }
 
-    except Exception as e:
-        error_msg = f"Writer agent failed for segment {segment_index}: {str(e)}"
-        logger.error(error_msg)
-        logger.exception(e)
+    if errors:
+        logger.warning(f"{len(errors)} segment(s) failed, {len(all_outputs)} succeeded")
 
-        return {
-            "errors": [error_msg],
-        }
+    return {
+        "writer_outputs": all_outputs,
+        "current_stage": "reviewer",
+        "errors": errors,
+    }
 
 
 async def run_reviewer(
@@ -442,12 +403,11 @@ def build_agentic_podcast_graph() -> StateGraph:
 
     The workflow follows this structure:
     1. START → run_director (create outline)
-    2. run_director → trigger_segment_writers (fan out)
-    3. trigger_segment_writers → write_segment (parallel execution)
-    4. write_segment → run_reviewer (evaluate and revise transcript)
-    5. run_reviewer → run_compliance (safety and quality gate)
-    6. run_compliance → save_workflow (persist results)
-    7. save_workflow → END
+    2. run_director → run_writers_sequential (write segments one by one)
+    3. run_writers_sequential → run_reviewer (evaluate transcript)
+    4. run_reviewer → run_compliance (safety and quality gate)
+    5. run_compliance → save_workflow (persist results)
+    6. save_workflow → END
 
     Returns:
         compiled stategraph ready for execution
@@ -457,30 +417,17 @@ def build_agentic_podcast_graph() -> StateGraph:
 
     # add nodes
     workflow.add_node("run_director", run_director)
-    workflow.add_node("write_segment", write_segment)
+    workflow.add_node("run_writers_sequential", run_writers_sequential)
     workflow.add_node("run_reviewer", run_reviewer)
     workflow.add_node("run_compliance", run_compliance)
     workflow.add_node("save_workflow", save_workflow)
 
-    # add edges
+    # add edges — fully sequential pipeline
     workflow.add_edge(START, "run_director")
-
-    # conditional edge for fan-out to writers
-    workflow.add_conditional_edges(
-        "run_director",
-        trigger_segment_writers,
-        ["write_segment"],
-    )
-
-    # all segment writers converge to reviewer
-    workflow.add_edge("write_segment", "run_reviewer")
-
-    # reviewer feeds into compliance
+    workflow.add_edge("run_director", "run_writers_sequential")
+    workflow.add_edge("run_writers_sequential", "run_reviewer")
     workflow.add_edge("run_reviewer", "run_compliance")
-
-    # compliance feeds into save
     workflow.add_edge("run_compliance", "save_workflow")
-
     workflow.add_edge("save_workflow", END)
 
     # compile the graph

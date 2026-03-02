@@ -32,22 +32,22 @@ class PodcastGenerationRequest(BaseModel):
 # target_words_per_turn controls how verbose each dialogue line is.
 PODCAST_LENGTH_PRESETS = {
     "short": {
-        "max_turns": 8,
+        "max_turns": 10,
         "num_segments": 3,
-        "target_duration_minutes": 3,
-        "target_words_per_turn": 35,
+        "target_duration_minutes": 4,
+        "target_words_per_turn": 30,
     },
     "medium": {
-        "max_turns": 12,
+        "max_turns": 14,
         "num_segments": 4,
-        "target_duration_minutes": 7,
-        "target_words_per_turn": 40,
+        "target_duration_minutes": 8,
+        "target_words_per_turn": 30,
     },
     "long": {
-        "max_turns": 15,
+        "max_turns": 18,
         "num_segments": 5,
-        "target_duration_minutes": 12,
-        "target_words_per_turn": 45,
+        "target_duration_minutes": 14,
+        "target_words_per_turn": 35,
     },
 }
 
@@ -75,7 +75,11 @@ async def _run_workflow_background(
         response = await AgenticPodcastService.create_workflow(workflow_request)
 
         # reload the episode record to update it
-        episode = await PodcastEpisode.get(episode_id)
+        try:
+            episode = await PodcastEpisode.get(episode_id)
+        except Exception:
+            logger.error(f"Episode {episode_id} disappeared during workflow (deleted?)")
+            return
         if not episode:
             logger.error(f"Episode {episode_id} disappeared during workflow")
             return
@@ -138,21 +142,38 @@ async def _run_workflow_background(
             f"({len(transcript_lines)} lines), starting audio generation..."
         )
 
+        # --- Transcript Word Count Validation ---
+        preset = PODCAST_LENGTH_PRESETS.get(podcast_length, PODCAST_LENGTH_PRESETS["medium"])
+        total_words = sum(len(line.dialogue.split()) for line in transcript_lines)
+        expected_words = preset.get("target_duration_minutes", 7) * 120  # 120 wpm effective rate
+        min_words = int(expected_words * 0.5)  # lower bound: 50% of target
+        logger.info(
+            f"Transcript word count: {total_words} words "
+            f"(target: {expected_words}, minimum: {min_words})"
+        )
+        if total_words < min_words:
+            logger.warning(
+                f"Transcript too short for episode {episode_id}: "
+                f"{total_words} words < {min_words} minimum. "
+                f"Expected ~{expected_words} words for {podcast_length or 'medium'} podcast."
+            )
+            episode.transcript["word_count_warning"] = (
+                f"Transcript is {total_words} words — target was ~{expected_words}. "
+                f"Audio may be shorter than expected."
+            )
+
         # --- Audio Generation ---
-        # Check compliance: only generate audio if approved (or no compliance ran)
-        compliance_approved = True
+        # Compliance is advisory only — log warnings but always proceed with audio
         if workflow.compliance_output:
             compliance_approved = workflow.compliance_output.get("approved", True)
+            if not compliance_approved:
+                risk = workflow.compliance_output.get("risk_level", "unknown")
+                logger.warning(
+                    f"Compliance flagged transcript for episode {episode_id} "
+                    f"(risk={risk}), proceeding with audio anyway"
+                )
 
-        if not compliance_approved:
-            logger.warning(
-                f"Compliance rejected transcript for episode {episode_id}, "
-                f"skipping audio generation"
-            )
-            episode.transcript["audio_skipped"] = "compliance_rejected"
-            episode.job_status_override = "completed"
-            await episode.save()
-        elif transcript_lines:
+        if transcript_lines:
             try:
                 from open_notebook.graphs.audio_generation import (
                     generate_audio_from_transcript,

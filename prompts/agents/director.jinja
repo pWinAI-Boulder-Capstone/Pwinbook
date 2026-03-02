@@ -115,11 +115,9 @@ Provide your response in the following JSON structure:
 
 # CRITICAL OUTPUT RULES
 
-- If you use extended thinking with <think> tags, put ALL reasoning inside <think></think> tags
-- Put the final JSON output OUTSIDE and AFTER any <think> tags  
-- Do NOT wrap the JSON in ```json code blocks - return the raw JSON object only
-- Example correct format:
-  <think>Let me analyze the content structure...</think>
-  {"reasoning": "I structured this outline to...", "segments": [...]}
+- Output ONLY the raw JSON object — no markdown, no code fences, no extra text
+- Do NOT use <think> tags or extended reasoning — go straight to the JSON output
+- Do NOT wrap the JSON in ```json code blocks
+- Your response must start with `{"reasoning":` and end with `]}`
 
-Please create the outline now, applying your strategic thinking to structure an engaging and informative podcast episode.
+Please create the outline now.

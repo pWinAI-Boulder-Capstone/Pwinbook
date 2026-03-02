@@ -797,9 +797,9 @@ export function GeneratePodcastDialog({ open, onOpenChange }: GeneratePodcastDia
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="short">Short (~3 min)</SelectItem>
-                        <SelectItem value="medium">Medium (~7 min)</SelectItem>
-                        <SelectItem value="long">Long (~12 min)</SelectItem>
+                        <SelectItem value="short">Short (~4 min)</SelectItem>
+                        <SelectItem value="medium">Medium (~8 min)</SelectItem>
+                        <SelectItem value="long">Long (~14 min)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

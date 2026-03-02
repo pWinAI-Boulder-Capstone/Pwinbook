@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from open_notebook.domain.agentic_podcast import DirectorOutput, OutlineSegment
 from open_notebook.graphs.utils import provision_langchain_model
 from open_notebook.utils import clean_thinking_content
+from open_notebook.utils.text_utils import strip_code_fences
 
 MAX_RETRIES = 3
 
@@ -67,7 +68,13 @@ async def director_agent(
                     if isinstance(ai_message.content, str)
                     else str(ai_message.content)
                 )
-                cleaned = clean_thinking_content(content_text)
+
+                logger.info(
+                    f"Director attempt {attempt}: raw response length={len(content_text)}, "
+                    f"preview={content_text[:200]!r}"
+                )
+
+                cleaned = strip_code_fences(clean_thinking_content(content_text))
 
                 if not cleaned or not cleaned.strip():
                     raise ValueError("Model returned empty content")

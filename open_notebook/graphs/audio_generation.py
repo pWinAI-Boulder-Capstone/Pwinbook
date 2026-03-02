@@ -25,11 +25,11 @@ TTS_RETRY_DELAY_S = 2.0
 
 # Duration validation targets (seconds)
 DURATION_TARGET_RANGE = {
-    "short": (120, 360),    # 2-6 min
-    "medium": (300, 600),   # 5-10 min
-    "long": (480, 900),     # 8-15 min
+    "short": (150, 420),    # 2.5-7 min
+    "medium": (360, 720),   # 6-12 min
+    "long": (600, 1080),    # 10-18 min
 }
-DEFAULT_DURATION_RANGE = (180, 720)  # 3-12 min fallback
+DEFAULT_DURATION_RANGE = (150, 900)  # 2.5-15 min fallback
 
 
 async def generate_single_clip(
