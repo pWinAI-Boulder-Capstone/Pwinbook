@@ -58,6 +58,7 @@ export interface PodcastGenerationRequest {
   content?: string
   notebook_id?: string
   briefing_suffix?: string | null
+  podcast_length?: 'short' | 'medium' | 'long'
 }
 
 export interface PodcastGenerationResponse {

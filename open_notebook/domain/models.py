@@ -71,14 +71,38 @@ class ModelManager:
         pass  # No caching needed
 
     async def get_model(self, model_id: str, **kwargs) -> Optional[ModelType]:
-        """Get a model by ID. Esperanto will cache the actual model instance."""
+        """Get a model by ID or name. Esperanto will cache the actual model instance.
+
+        Supports both SurrealDB record IDs (e.g. 'model:abc123') and
+        plain model names (e.g. 'gpt-5-mini'). When a plain name is given,
+        a lookup by name is performed instead of Model.get().
+        """
         if not model_id:
             return None
 
-        try:
-            model: Model = await Model.get(model_id)
-        except Exception:
-            raise ValueError(f"Model with ID {model_id} not found")
+        model: Optional[Model] = None
+
+        if ":" in model_id:
+            # Looks like a SurrealDB record ID (e.g. 'model:abc123')
+            try:
+                model = await Model.get(model_id)
+            except Exception:
+                raise ValueError(f"Model with ID {model_id} not found")
+        else:
+            # Plain model name (e.g. 'gpt-5-mini') — look up by name
+            results = await repo_query(
+                "SELECT * FROM model WHERE name = $name LIMIT 1",
+                {"name": model_id},
+            )
+            if results:
+                model = Model(**results[0])
+            else:
+                raise ValueError(
+                    f"Model '{model_id}' not found by ID or name"
+                )
+
+        if model is None:
+            raise ValueError(f"Model '{model_id}' could not be resolved")
 
         if not model.type or model.type not in [
             "language",

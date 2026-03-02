@@ -1,0 +1,3 @@
+-- Rollback Migration 11: Remove job_status_override field from episode table
+
+REMOVE FIELD IF EXISTS job_status_override ON TABLE episode;

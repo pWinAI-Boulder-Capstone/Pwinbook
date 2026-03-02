@@ -1,0 +1,177 @@
+# compliance agent - final safety and quality gate before production
+
+import asyncio
+from typing import Any, Dict, List, Optional
+
+from ai_prompter import Prompter
+from langchain_core.output_parsers.pydantic import PydanticOutputParser
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from open_notebook.domain.agentic_podcast import (
+    ComplianceOutput,
+    TranscriptLine,
+)
+from open_notebook.graphs.utils import provision_langchain_model
+from open_notebook.utils import clean_thinking_content
+
+
+class ComplianceCheck(BaseModel):
+    passed: bool = Field(description="Whether this check passed")
+    notes: str = Field(description="Brief assessment for this check")
+
+
+class ComplianceFlag(BaseModel):
+    severity: str = Field(description="critical, warning, or info")
+    category: str = Field(description="Category of the flag")
+    description: str = Field(description="Clear description of the issue")
+    location: str = Field(description="Where in the transcript the issue occurs")
+    recommendation: str = Field(description="How to address it")
+
+
+class ComplianceResult(BaseModel):
+    approved: bool = Field(description="Whether the transcript is approved")
+    overall_risk_level: str = Field(description="low, medium, or high")
+    checks: Dict[str, ComplianceCheck] = Field(
+        description="Individual compliance checks"
+    )
+    flags: List[ComplianceFlag] = Field(
+        default_factory=list, description="List of compliance flags"
+    )
+    summary: str = Field(description="Overall compliance assessment")
+
+
+async def compliance_agent(
+    transcript: List[TranscriptLine],
+    content: str,
+    briefing: str,
+    speakers: List[Dict[str, Any]],
+    reviewer_summary: Optional[str] = None,
+    model_name: Optional[str] = None,
+) -> ComplianceOutput:
+    """performs final safety and quality gate check on a transcript"""
+    logger.info(
+        f"compliance starting check on {len(transcript)} transcript lines"
+    )
+
+    try:
+        prompt_data: Dict[str, Any] = {
+            "briefing": briefing,
+            "content": content,
+            "speakers": speakers,
+            "transcript": [t.model_dump() for t in transcript],
+            "reviewer_summary": reviewer_summary,
+        }
+
+        parser = PydanticOutputParser(pydantic_object=ComplianceResult)
+        system_prompt = Prompter(
+            prompt_template="agents/compliance", parser=parser
+        ).render(data=prompt_data)
+
+        model = await provision_langchain_model(
+            system_prompt,
+            model_name,
+            "tools",
+            max_tokens=4000,
+            structured={"type": "json"},
+        )
+
+        logger.debug("calling ai model for compliance check")
+
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                ai_message = await model.ainvoke(system_prompt)
+
+                content_text = (
+                    ai_message.content
+                    if isinstance(ai_message.content, str)
+                    else str(ai_message.content)
+                )
+                cleaned = clean_thinking_content(content_text)
+
+                if not cleaned or not cleaned.strip():
+                    raise ValueError("Model returned empty content")
+
+                result = parser.parse(cleaned)
+                break
+            except Exception as parse_err:
+                last_error = parse_err
+                logger.warning(f"Compliance attempt {attempt}/3 failed: {parse_err}")
+                if attempt < 3:
+                    await asyncio.sleep(2 * attempt)
+        else:
+            raise RuntimeError(f"Compliance failed after 3 attempts: {last_error}")
+
+        compliance_output = ComplianceOutput(
+            approved=result.approved,
+            overall_risk_level=result.overall_risk_level,
+            checks={k: v.model_dump() for k, v in result.checks.items()},
+            flags=[f.model_dump() for f in result.flags],
+            summary=result.summary,
+        )
+
+        # --- Programmatic citation validation ---
+        # Track citation coverage for quality reporting.
+        # Missing citations are flagged as warnings but do not auto-reject
+        # the script, since citations are encouraged but not mandatory.
+        lines_missing_citation = []
+        for i, line in enumerate(transcript):
+            if not line.citation or not line.citation.strip():
+                lines_missing_citation.append(
+                    f"Line {i + 1} ({line.speaker}): missing citation"
+                )
+
+        citation_ratio = (
+            (len(transcript) - len(lines_missing_citation)) / len(transcript)
+            if transcript
+            else 1.0
+        )
+
+        if lines_missing_citation:
+            severity = "warning" if citation_ratio >= 0.5 else "critical"
+            passed = citation_ratio >= 0.5
+
+            compliance_output.checks["citation_completeness"] = {
+                "passed": passed,
+                "notes": (
+                    f"{len(lines_missing_citation)} of {len(transcript)} lines "
+                    f"missing citations ({citation_ratio:.0%} coverage)"
+                ),
+            }
+
+            compliance_output.flags.append({
+                "severity": severity,
+                "category": "citation_completeness",
+                "description": (
+                    f"{len(lines_missing_citation)} dialogue lines are missing "
+                    f"source citations ({citation_ratio:.0%} coverage)."
+                ),
+                "location": "; ".join(lines_missing_citation[:5])
+                + (f" ... and {len(lines_missing_citation) - 5} more" if len(lines_missing_citation) > 5 else ""),
+                "recommendation": "Consider adding source references to improve traceability.",
+            })
+
+            logger.info(
+                f"compliance: citation coverage {citation_ratio:.0%} — "
+                f"{len(lines_missing_citation)} lines without citations"
+            )
+        else:
+            # Ensure citation check is recorded as passed
+            if "citation_completeness" not in compliance_output.checks:
+                compliance_output.checks["citation_completeness"] = {
+                    "passed": True,
+                    "notes": f"All {len(transcript)} lines have citations",
+                }
+
+        logger.info(
+            f"compliance done: approved={result.approved}, "
+            f"risk={result.overall_risk_level}, "
+            f"flags={len(result.flags)}"
+        )
+        return compliance_output
+
+    except Exception as e:
+        logger.error(f"compliance check failed: {e}")
+        logger.exception(e)
+        raise

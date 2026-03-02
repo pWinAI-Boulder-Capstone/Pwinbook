@@ -12,6 +12,7 @@ from .text_utils import (
     remove_non_ascii,
     remove_non_printable,
     split_text,
+    strip_code_fences,
 )
 
 from .web_search import tavily_search
@@ -28,6 +29,7 @@ __all__ = [
     "remove_non_printable",
     "parse_thinking_content",
     "clean_thinking_content",
+    "strip_code_fences",
     "token_count",
     "token_cost",
     "compare_versions",

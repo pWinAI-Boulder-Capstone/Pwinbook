@@ -14,6 +14,9 @@ from .token_utils import token_count
 # Pattern for matching thinking content in AI responses
 THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
+# Pattern for stripping markdown code fences (```json ... ``` or ``` ... ```)
+CODE_FENCE_PATTERN = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL)
+
 
 def split_text(txt: str, chunk_size=500):
     """
@@ -119,9 +122,30 @@ def parse_thinking_content(content: str) -> Tuple[str, str]:
     return thinking_content, cleaned_content
 
 
+def strip_code_fences(content: str) -> str:
+    """
+    Remove markdown code fences (```json ... ``` or ``` ... ```) from AI output.
+
+    Many models wrap JSON responses in code blocks despite being told not to.
+    This strips the fences so the raw JSON can be parsed.
+
+    Args:
+        content (str): Text that may be wrapped in code fences
+
+    Returns:
+        str: Content with code fences removed, or original if none found
+    """
+    if not content:
+        return content
+    match = CODE_FENCE_PATTERN.match(content)
+    if match:
+        return match.group(1).strip()
+    return content
+
+
 def clean_thinking_content(content: str) -> str:
     """
-    Remove thinking content from AI responses, returning only the cleaned content.
+    Remove thinking content and code fences from AI responses.
 
     This is a convenience function for cases where you only need the cleaned
     content and don't need access to the thinking process.
@@ -130,7 +154,7 @@ def clean_thinking_content(content: str) -> str:
         content (str): The original message content with potential <think> tags
 
     Returns:
-        str: Content with <think> blocks removed and whitespace cleaned
+        str: Content with <think> blocks and code fences removed
 
     Example:
         >>> content = "<think>Let me think...</think>Here's the answer"
@@ -138,4 +162,4 @@ def clean_thinking_content(content: str) -> str:
         "Here's the answer"
     """
     _, cleaned_content = parse_thinking_content(content)
-    return cleaned_content
+    return strip_code_fences(cleaned_content)

@@ -11,6 +11,7 @@ from api.podcast_service import (
     PodcastGenerationRequest,
     PodcastGenerationResponse,
     PodcastService,
+    _running_workflows,
 )
 
 router = APIRouter()
@@ -40,23 +41,25 @@ def _resolve_audio_path(audio_file: str) -> Path:
 @router.post("/podcasts/generate", response_model=PodcastGenerationResponse)
 async def generate_podcast(request: PodcastGenerationRequest):
     """
-    Generate a podcast episode using Episode Profiles.
-    Returns immediately with job ID for status tracking.
+    Generate a podcast episode using the multi-agent workflow.
+    Returns immediately with episode ID for status tracking.
+    The workflow runs in the background (Director → Writers → Reviewer → Compliance).
     """
     try:
-        job_id = await PodcastService.submit_generation_job(
+        episode_id = await PodcastService.submit_generation_job(
             episode_profile_name=request.episode_profile,
             speaker_profile_name=request.speaker_profile,
             episode_name=request.episode_name,
             notebook_id=request.notebook_id,
             content=request.content,
             briefing_suffix=request.briefing_suffix,
+            podcast_length=request.podcast_length,
         )
 
         return PodcastGenerationResponse(
-            job_id=job_id,
-            status="submitted",
-            message=f"Podcast generation started for episode '{request.episode_name}'",
+            job_id=episode_id,
+            status="running",
+            message=f"Multi-agent podcast generation started for '{request.episode_name}'",
             episode_profile=request.episode_profile,
             episode_name=request.episode_name,
         )
@@ -90,20 +93,33 @@ async def list_podcast_episodes():
 
         response_episodes = []
         for episode in episodes:
-            # Skip incomplete episodes without command or audio
-            if not episode.command and not episode.audio_file:
-                continue
-            
-            # Get job status if available
+            episode_id_str = str(episode.id)
+
+            # Determine job status from multiple sources
             job_status = None
-            if episode.command:
+            status_override = getattr(episode, "job_status_override", None)
+
+            if episode_id_str in _running_workflows:
+                # Active background workflow
+                job_status = "running"
+            elif status_override:
+                # Status set by background workflow completion/failure
+                job_status = status_override
+            elif episode.command:
+                # Legacy: old surreal-commands job
                 try:
                     job_status = await episode.get_job_status()
                 except Exception:
                     job_status = "unknown"
-            else:
+            elif episode.audio_file:
                 # No command but has audio file = completed import
                 job_status = "completed"
+            elif episode.transcript and isinstance(episode.transcript, dict) and (episode.transcript.get("transcript") or episode.transcript.get("dialogue")):
+                # Has transcript from agentic workflow = completed
+                job_status = "completed"
+            else:
+                # No command, no audio, no transcript — skip
+                continue
 
             audio_url = None
             if episode.audio_file:
@@ -142,16 +158,26 @@ async def get_podcast_episode(episode_id: str):
     try:
         episode = await PodcastService.get_episode(episode_id)
 
-        # Get job status if available
+        # Determine job status from multiple sources
+        episode_id_str = str(episode.id)
         job_status = None
-        if episode.command:
+        status_override = getattr(episode, "job_status_override", None)
+
+        if episode_id_str in _running_workflows:
+            job_status = "running"
+        elif status_override:
+            job_status = status_override
+        elif episode.command:
             try:
                 job_status = await episode.get_job_status()
             except Exception:
                 job_status = "unknown"
+        elif episode.audio_file:
+            job_status = "completed"
+        elif episode.transcript and isinstance(episode.transcript, dict) and (episode.transcript.get("transcript") or episode.transcript.get("dialogue")):
+            job_status = "completed"
         else:
-            # No command but has audio file = completed import
-            job_status = "completed" if episode.audio_file else "unknown"
+            job_status = "unknown"
 
         audio_url = None
         if episode.audio_file:

@@ -1,0 +1,10 @@
+-- Rollback Migration 10: Remove agentic_podcast_workflow table
+
+-- Remove indexes
+REMOVE INDEX IF EXISTS idx_agentic_workflow_status ON TABLE agentic_podcast_workflow;
+REMOVE INDEX IF EXISTS idx_agentic_workflow_stage ON TABLE agentic_podcast_workflow;
+REMOVE INDEX IF EXISTS idx_agentic_workflow_created ON TABLE agentic_podcast_workflow;
+REMOVE INDEX IF EXISTS idx_agentic_workflow_episode_profile ON TABLE agentic_podcast_workflow;
+
+-- Remove table
+REMOVE TABLE IF EXISTS agentic_podcast_workflow;

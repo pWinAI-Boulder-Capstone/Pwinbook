@@ -113,6 +113,10 @@ class PodcastEpisode(ObjectModel):
     command: Optional[Union[str, RecordID]] = Field(
         default=None, description="Link to surreal-commands job"
     )
+    job_status_override: Optional[str] = Field(
+        default=None,
+        description="Manual status override (running, completed, failed) for agentic workflow episodes",
+    )
 
     class Config:
         arbitrary_types_allowed = True
