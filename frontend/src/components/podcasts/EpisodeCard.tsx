@@ -106,6 +106,7 @@ type OutlineData = {
 type TranscriptEntry = {
   speaker?: string
   dialogue?: string
+  text?: string
 }
 
 type TranscriptData = {
@@ -123,10 +124,12 @@ function extractOutlineSegments(outline: unknown): OutlineSegment[] {
 }
 
 function extractTranscriptEntries(transcript: unknown): TranscriptEntry[] {
-  if (transcript && typeof transcript === 'object' && 'transcript' in transcript) {
-    const data = transcript as TranscriptData
-    if (Array.isArray(data.transcript)) {
-      return data.transcript
+  if (transcript && typeof transcript === 'object') {
+    // Support both 'transcript' (new format) and 'dialogue' (legacy format) keys
+    const data = transcript as Record<string, unknown>
+    const entries = data.transcript ?? data.dialogue
+    if (Array.isArray(entries)) {
+      return entries as TranscriptEntry[]
     }
   }
   return []
@@ -349,7 +352,7 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
                           transcriptEntries.map((entry, index) => (
                             <div key={index} className="rounded border bg-muted/20 p-3 text-xs space-y-1">
                               <p className="font-semibold text-foreground">{entry.speaker ?? 'Speaker'}</p>
-                              <p className="text-muted-foreground whitespace-pre-wrap">{entry.dialogue ?? ''}</p>
+                              <p className="text-muted-foreground whitespace-pre-wrap">{entry.dialogue ?? entry.text ?? ''}</p>
                             </div>
                           ))
                         ) : (

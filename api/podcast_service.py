@@ -211,13 +211,19 @@ class PodcastService:
                 episode_profile={
                     "name": episode_profile.name,
                     "description": episode_profile.description or "",
+                    "outline_provider": episode_profile.outline_provider,
                     "outline_model": episode_profile.outline_model,
+                    "transcript_provider": episode_profile.transcript_provider,
                     "transcript_model": episode_profile.transcript_model,
+                    "num_segments": episode_profile.num_segments,
+                    "default_briefing": episode_profile.default_briefing,
                 },
                 speaker_profile={
                     "name": speaker_profile.name,
                     "description": speaker_profile.description or "",
-                    "speakers": [s.get("name", "") for s in speaker_profile.speakers],
+                    "tts_provider": speaker_profile.tts_provider,
+                    "tts_model": speaker_profile.tts_model,
+                    "speakers": speaker_profile.speakers,
                 },
                 briefing=episode_profile.default_briefing,
                 content=content or f"Notebook: {notebook_id}",
@@ -276,7 +282,7 @@ class PodcastService:
                 status = "running"
             elif status_override:
                 status = status_override
-            elif episode.transcript and episode.transcript.get("dialogue"):
+            elif episode.transcript and (episode.transcript.get("transcript") or episode.transcript.get("dialogue")):
                 status = "completed"
             else:
                 status = "pending"
@@ -294,7 +300,7 @@ class PodcastService:
                 "speaker_profile": episode.speaker_profile.get("name", ""),
                 "created": str(episode.created) if episode.created else None,
                 "has_transcript": bool(
-                    episode.transcript and episode.transcript.get("dialogue")
+                    episode.transcript and (episode.transcript.get("transcript") or episode.transcript.get("dialogue"))
                 ),
                 "has_outline": bool(episode.outline),
             }

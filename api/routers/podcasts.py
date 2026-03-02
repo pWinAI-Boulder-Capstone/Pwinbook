@@ -113,7 +113,7 @@ async def list_podcast_episodes():
             elif episode.audio_file:
                 # No command but has audio file = completed import
                 job_status = "completed"
-            elif episode.transcript and isinstance(episode.transcript, dict) and episode.transcript.get("dialogue"):
+            elif episode.transcript and isinstance(episode.transcript, dict) and (episode.transcript.get("transcript") or episode.transcript.get("dialogue")):
                 # Has transcript from agentic workflow = completed
                 job_status = "completed"
             else:
@@ -173,7 +173,7 @@ async def get_podcast_episode(episode_id: str):
                 job_status = "unknown"
         elif episode.audio_file:
             job_status = "completed"
-        elif episode.transcript and isinstance(episode.transcript, dict) and episode.transcript.get("dialogue"):
+        elif episode.transcript and isinstance(episode.transcript, dict) and (episode.transcript.get("transcript") or episode.transcript.get("dialogue")):
             job_status = "completed"
         else:
             job_status = "unknown"

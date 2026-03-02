@@ -41,6 +41,18 @@ class DirectorOutput(BaseModel):
 class TranscriptLine(BaseModel):
     speaker: str = Field(..., description="Name of the speaker")
     dialogue: str = Field(..., description="What the speaker says")
+    citation: str = Field(
+        default="",
+        description="Source reference grounding this statement (e.g. section title, paragraph, or key phrase from the source content)",
+    )
+    pacing_cue: str = Field(
+        default="",
+        description="Delivery cue for TTS/performance (e.g. 'slowly, with emphasis', 'upbeat', 'pause before', 'thoughtful')",
+    )
+    pronunciation_notes: str = Field(
+        default="",
+        description="Pronunciation guidance for uncommon terms (e.g. 'ViT: vit, rhymes with bit', 'GeLU: gee-loo')",
+    )
 
 
 class WriterOutput(BaseModel):

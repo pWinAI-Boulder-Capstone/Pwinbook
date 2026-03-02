@@ -1,0 +1,5 @@
+-- Migration 11: Add job_status_override field to episode table
+-- This field tracks the status of agentic podcast generation workflows
+-- (running, processing, completed, failed)
+
+DEFINE FIELD IF NOT EXISTS job_status_override ON TABLE episode TYPE option<string> PERMISSIONS FULL;

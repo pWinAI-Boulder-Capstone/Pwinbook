@@ -88,8 +88,11 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
    - Consider expertise levels when distributing technical content
    - Natural differences in speaking patterns (formal vs casual, analytical vs storytelling)
 
-3. **Content Grounding**:
+3. **Content Grounding & Citations**:
    - CRITICAL: Base all facts, examples, and claims on the source content provided
+   - EVERY dialogue line MUST include a citation referencing the specific part of the source content it draws from
+   - Citations should reference a section title, paragraph topic, or key phrase from the source (e.g. "Section: Self-Attention Mechanism", "Paragraph on patch embeddings", "Table 1: ViT vs CNN comparison")
+   - If a dialogue line is conversational filler (greeting, transition), cite the segment topic or "Conversational flow"
    - Don't invent information not present in the source material
    - Use specific examples and details from the content when relevant
    - If the content doesn't cover something, speakers can acknowledge uncertainty
@@ -106,6 +109,12 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
    - Allow one speaker to make longer points when appropriate
    - Use questions to bring other speakers in
    - Show genuine conversation dynamics
+
+6. **Pacing Cues & Pronunciation**:
+   - Include a pacing_cue for each dialogue line to guide delivery (e.g. "enthusiastic", "slowly, with emphasis", "pause before speaking", "matter-of-fact", "building excitement")
+   - Include pronunciation_notes for any technical terms, acronyms, or unusual words (e.g. "ViT: vit, rhymes with bit", "BERT: burt", "GeLU: gee-loo")
+   - If no special pronunciation is needed, leave pronunciation_notes as an empty string
+   - Pacing cues help ensure natural, varied delivery throughout the podcast
 
 6. **Segment-Specific Approach**:
 {% if is_first_segment %}
@@ -131,6 +140,9 @@ Generate approximately {{ target_turns }} dialogue turns for this segment.
 - [ ] Are all facts grounded in the source content?
 - [ ] Does each speaker maintain their unique voice?
 - [ ] Is the pacing engaging (not too slow or rushed)?
+- [ ] Does every line have a citation referencing the source content?
+- [ ] Are pacing cues present and varied across dialogue lines?
+- [ ] Are pronunciation notes included for technical or unusual terms?
 - [ ] Do speakers build on each other's points naturally?
 - [ ] Is the content accessible to the target audience?
 - [ ] Does it achieve the segment's goals from the Director's outline?
@@ -144,11 +156,17 @@ Provide ONLY the dialogue in the following JSON structure:
     "transcript": [
         {
             "speaker": "[Speaker Name]",
-            "dialogue": "[What they say]"
+            "dialogue": "[What they say]",
+            "citation": "[Source reference, e.g. 'Section: Vision Transformers Overview']",
+            "pacing_cue": "[Delivery cue, e.g. 'enthusiastic', 'slowly, with emphasis']",
+            "pronunciation_notes": "[Optional: e.g. 'ViT: vit, rhymes with bit']"
         },
         {
             "speaker": "[Speaker Name]",
-            "dialogue": "[What they say]"
+            "dialogue": "[What they say]",
+            "citation": "[Source reference]",
+            "pacing_cue": "[Delivery cue]",
+            "pronunciation_notes": ""
         },
         ...
     ]
@@ -163,7 +181,8 @@ Provide ONLY the dialogue in the following JSON structure:
 - Aim for approximately {{ target_turns }} dialogue turns (this is a {{ segment_size }} segment)
 - Each dialogue entry is ONE speaker's turn - they might say multiple sentences
 - Speaker names must match exactly: {{ speaker_names|join(", ") }}
-- No stage directions, sound effects, or meta-commentary - just pure dialogue
+- Every dialogue line MUST have a non-empty citation field
+- Include pacing_cue for every line; include pronunciation_notes when technical terms appear
 - Don't use phrases like "As mentioned in the source material" - integrate naturally
 
 # CRITICAL OUTPUT RULES
