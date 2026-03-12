@@ -428,6 +428,7 @@ async def get_deck_cards(deck_id: str):
             raise HTTPException(status_code=404, detail="Deck not found")
 
         cards = await deck.get_cards()
+        logger.info(f"[get_deck_cards] deck_id={deck_id}, found {len(cards)} cards")
 
         return [
             FlashcardCardResponse(
@@ -611,6 +612,8 @@ async def complete_session(session_id: str):
 
         session.complete()
         await session.save()
+        logger.info(f"[complete_session] Session {session_id} completed. "
+                     f"deck_id={session.deck_id}, answers={len(session.user_answers)}")
 
         # Update SRS for each card answered in the session
         for answer in session.user_answers:
@@ -622,17 +625,25 @@ async def complete_session(session_id: str):
                 card = await Flashcard.get(card_id)
                 if card:
                     quality = 4 if correct else 1
+                    logger.info(f"[complete_session] Updating SRS for card {card_id}, quality={quality}")
                     await card.save_with_srs_update(quality)
+                    logger.info(f"[complete_session] Card {card_id} SRS updated OK. "
+                                 f"stage={card.srs_stage}, reps={card.srs_repetitions}")
             except Exception as card_err:
-                logger.warning(f"Failed to update SRS for card {card_id}: {card_err}")
+                logger.warning(f"[complete_session] Failed to update SRS for card {card_id}: {card_err}")
+                logger.exception(card_err)
 
         # Update deck stats
         try:
             deck = await FlashcardDeck.get(session.deck_id)
             if deck:
+                logger.info(f"[complete_session] Updating deck stats for {session.deck_id}")
                 await deck.update_stats()
+                logger.info(f"[complete_session] Deck stats updated: total={deck.total_cards}, "
+                             f"learned={deck.cards_learned}, due={deck.cards_due}, new={deck.cards_new}")
         except Exception as stats_err:
-            logger.warning(f"Failed to update deck stats: {stats_err}")
+            logger.warning(f"[complete_session] Failed to update deck stats: {stats_err}")
+            logger.exception(stats_err)
 
         return FlashcardSessionResponse(
             id=session.id or "",

@@ -111,27 +111,44 @@ class FlashcardDeck(ObjectModel):
         if not deck_result:
             return None
         deck_data = deck_result[0]
-        # Get card stats separately
-        stats_result = await repo_query(
-            """
-            SELECT
-                count() as total_cards,
-                count(IF srs_stage = 'new' THEN 1 END) as cards_new,
-                count(IF srs_stage = 'learning' THEN 1 END) as cards_learning,
-                count(IF srs_stage = 'review' AND srs_due_date != NONE AND type::datetime(srs_due_date) <= time::now() THEN 1 END) as cards_due,
-                count(IF srs_repetitions >= 3 THEN 1 END) as cards_learned
-            FROM flashcard WHERE deck_id = $deck_id
-            GROUP ALL
-            """,
-            {"deck_id": record_id},
-        )
-        if stats_result:
-            deck_data.update(stats_result[0])
-        else:
-            deck_data.update({
-                "total_cards": 0, "cards_new": 0, "cards_learning": 0,
-                "cards_due": 0, "cards_learned": 0,
-            })
+        # Get card stats separately — wrapped in try/except so a stats query
+        # failure never prevents the deck from being returned
+        try:
+            stats_result = await repo_query(
+                """
+                SELECT
+                    count() as total_cards,
+                    count(IF srs_stage = 'new' THEN 1 END) as cards_new,
+                    count(IF srs_stage = 'learning' OR srs_stage = 'relearning' THEN 1 END) as cards_learning,
+                    count(IF srs_stage = 'review' AND srs_repetitions < 3 THEN 1 END) as cards_due,
+                    count(IF srs_repetitions >= 3 THEN 1 END) as cards_learned
+                FROM flashcard WHERE deck_id = $deck_id
+                GROUP ALL
+                """,
+                {"deck_id": record_id},
+            )
+            if stats_result:
+                deck_data.update(stats_result[0])
+            else:
+                deck_data.update({
+                    "total_cards": 0, "cards_new": 0, "cards_learning": 0,
+                    "cards_due": 0, "cards_learned": 0,
+                })
+        except Exception as e:
+            logger.warning(f"Failed to fetch card stats for deck {deck_id}: {e}")
+            # Fall back to card count only
+            try:
+                count_result = await repo_query(
+                    "SELECT count() as count FROM flashcard WHERE deck_id = $deck_id GROUP ALL",
+                    {"deck_id": record_id},
+                )
+                deck_data["total_cards"] = count_result[0].get("count", 0) if count_result else 0
+            except Exception:
+                deck_data["total_cards"] = 0
+            deck_data.setdefault("cards_new", 0)
+            deck_data.setdefault("cards_learning", 0)
+            deck_data.setdefault("cards_due", 0)
+            deck_data.setdefault("cards_learned", 0)
         return deck_data
 
     async def get_cards(self) -> List["Flashcard"]:
@@ -140,7 +157,15 @@ class FlashcardDeck(ObjectModel):
             "SELECT * FROM flashcard WHERE deck_id = $deck_id ORDER BY created ASC",
             {"deck_id": ensure_record_id(self.id)},
         )
-        return [Flashcard(**card) for card in result] if result else []
+        if not result:
+            return []
+        cards = []
+        for card_data in result:
+            try:
+                cards.append(Flashcard(**card_data))
+            except Exception as e:
+                logger.warning(f"Failed to parse card {card_data.get('id')}: {e}")
+        return cards
 
     async def get_due_cards(self, limit: int = 50) -> List["Flashcard"]:
         """Get cards that are due for review based on SRS schedule"""
@@ -545,6 +570,7 @@ class FlashcardSession(ObjectModel):
     def complete(self) -> None:
         """Mark session as completed and calculate final stats"""
         self.completed_at = datetime.now().isoformat()
+        self.total_cards = len(self.user_answers)
         start = datetime.fromisoformat(self.started_at)
         end = datetime.fromisoformat(self.completed_at)
         self.total_time_seconds = int((end - start).total_seconds())
