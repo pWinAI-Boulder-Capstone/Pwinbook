@@ -1,103 +1,125 @@
-# Image generation flow (Chat with source)
+# Image generation and editing flow
 
-This page describes **each step** of image generation when you use **Chat with source** and ask for an image (e.g. “draw a bar chart of my revenue”).
+This document explains how image features currently work in both:
 
----
+- **Chat with source**
+- **Chat with notebook**
 
-## Where it runs
-
-- **UI:** Open a source → Chat with source → send a message that asks for an image.
-- **Backend:** `open_notebook/graphs/source_chat.py` (graph + intent + refiner) and `open_notebook/utils/openrouter_image.py` (OpenRouter API).
+It also covers **image editing** (for example: "add the sun to the previous image", "remove the title from the above image", "make the background darker").
 
 ---
 
-## Step-by-step flow
+## Quick overview
 
-### Step 1: Intent classification (LLM)
+In both chat experiences, the flow follows the same high-level pattern:
 
-- **Input:** Your last message (e.g. “draw a bar chart of revenue”).
-- **What happens:** A small LLM call with system prompt: “Reply with exactly one word: TEXT or IMAGE.”
-- **Output:** Either `"text"` or `"image"`.
-- **If TEXT:** Normal Q&A branch runs (no image).
-- **If IMAGE:** Flow continues to Step 2.
-
-**Code:** `classify_intent()` in `source_chat.py`; system prompt `CLASSIFY_INTENT_SYSTEM`.
-
----
-
-### Step 2: Build source context
-
-- **Input:** The current source (document) and its insights.
-- **What happens:** `ContextBuilder` loads the source and formats it into one text block (title, content, insights, metadata).
-- **Output:** A long string `formatted_context` (used in the next step).
-
-**Code:** `ContextBuilder` + `_format_source_context()` in `source_chat.py`.
+1. Classify the user intent (`TEXT`, `IMAGE`, or `IMAGE_EDIT`).
+2. Build context from the selected scope (single source or notebook context).
+3. Ask an LLM to write a refined image prompt.
+4. Call OpenRouter image API.
+5. Return the result as an AI message.
+6. Frontend renders image if content starts with `data:image/...`.
 
 ---
 
-### Step 3: Refiner LLM (document + your request → one image prompt)
 
-- **Input:**
-  - Document content (from Step 2).
-  - Your message (e.g. “draw a bar chart of my revenue”).
-- **What happens:** An LLM is called with a system prompt that says: “Given the document and the user’s image request, write a **single, detailed prompt** for an image model. Include specific data from the document for charts/graphs. Output only the image prompt.”
-- **Output:** One string: the **refined prompt** that will be sent to the image model (e.g. “A bar chart showing revenue for Q1: $X, Q2: $Y, …”).
+## Flow A: Chat with source -> Generate image
 
-**Code:** `get_refined_prompt()` in `call_source_image_agent()`; system prompt `IMAGE_PROMPT_REFINER_SYSTEM`.
 
-**If the document doesn't have the data:** The refiner is instructed to use only data that appears in the document and never to invent numbers (e.g. GPA). If the document does not contain the information needed for the chart (e.g. no GPA/CGPA), the refiner outputs `[NO_RELEVANT_CONTENT]` plus a short message. The app then skips image generation and shows that message to the user instead of generating a graph with made-up data.
+### 1) Intent classification
 
-So: **the LLM does not generate the image.** It only turns “document + your request” into a **text prompt** that the image model will use in Step 4.
+- The latest user message is classified as `TEXT`, `IMAGE`, or `IMAGE_EDIT`.
+- If `TEXT`, it goes to the normal source Q&A path.
+- If `IMAGE`, it runs source image generation.
+- If `IMAGE_EDIT`, it runs source image editing flow.
+
+Code: `classify_intent()` and graph routing in `source_chat.py`.
+
+### 2) Build source context
+
+- Context is built from the selected source (and insights).
+- Context is formatted into one text block for the refiner model.
+
+Code: `ContextBuilder` usage and `_format_source_context()` in `source_chat.py`.
+
+### 3) Refine user request into one image prompt
+
+- The refiner model receives:
+  - source context
+  - user request
+- It returns one detailed prompt suitable for an image model.
+
+Code: `get_refined_prompt()` in `call_source_image_agent()`.
+
+### 4) No-relevant-content guard
+
+- If context does not contain what is needed, refiner returns `[NO_RELEVANT_CONTENT] ...`.
+- System returns a normal text reply instead of generating a fake or invented chart/image.
+
+### 5) Generate image with OpenRouter
+
+- The refined prompt is sent to `generate_image()`.
+- Response is either:
+  - a data URL (`data:image/...`) on success
+  - an error string on failure
+
+### 6) Return to frontend
+
+- Backend places output into an `AIMessage`.
+- Frontend chat renderer displays image when message content is a data URL.
+
+UI rendering code: `frontend/src/components/source/ChatPanel.tsx`.
 
 ---
 
-### Step 4: Image generation (OpenRouter)
+## Flow B: Chat with notebook -> Generate image
 
-- **Input:** The refined prompt from Step 3.
-- **What happens:**
-  - App reads the **default image model** (Models → Default Model Assignments → Image Generation Model).
-  - Sends one request to **OpenRouter** `chat/completions` with `modalities=["image"]` (or `["image","text"]` for some models).
-  - Request body: `{ "model": "<name>", "messages": [{ "role": "user", "content": "<refined_prompt>" }], "modalities": [...] }`.
-- **Output:** Either a **data URL** string (e.g. `data:image/png;base64,...`) or an **error message** string.
 
-**Code:** `generate_image()` in `open_notebook/utils/openrouter_image.py`.
+Flow is conceptually the same as source chat, with one key difference:
+
+- The context comes from notebook-scoped sources/notes selected by the user.
+
+Detailed behavior:
+
+1. Intent is classified (`TEXT`, `IMAGE`, `IMAGE_EDIT`).
+2. Notebook context is formatted by `_format_notebook_context(...)`.
+3. Refiner model produces a single image prompt.
+4. If `[NO_RELEVANT_CONTENT]` appears, return a text explanation and skip generation.
+5. `generate_image(...)` is called.
+6. Result is stored as AI message and shown in shared `ChatPanel`.
+
+Code references:
+
+- `classify_intent_notebook()`
+- `call_notebook_image_agent()`
+- graph routing in `open_notebook/graphs/chat.py`
 
 ---
 
-### Step 5: Response to the UI
+## Flow C: Image editing (both source and notebook chat)
 
-- The data URL (or error message) is put into an `AIMessage` and returned as the assistant reply.
-- The frontend shows the image if the content is a data URL, or shows the error text.
+Image edit is available in both chat modes through intent `IMAGE_EDIT`.
 
----
+### Typical user messages
 
-## How to see what happens at each step
+- "Add a sun in the sky"
+- "Remove the chart title"
+- "Make the colors pastel"
+- "Keep everything same, but replace the lion with a tiger"
 
-Logging was added so you can follow the flow in the **server logs** (the terminal where the API/backend runs).
+### Step-by-step edit logic
 
-1. Start the backend (e.g. run the API server).
-2. In the app, open a source and use Chat with source.
-3. Send a message that asks for an image (e.g. “generate a simple bar chart”).
-4. Watch the server terminal for lines starting with `[Image flow]`:
+1. Locate the last generated image in chat history (last AI message with `data:image/...`).
+2. Try **pixel edit** first:
+   - send original image + instruction to `edit_image(...)`.
+3. If pixel edit fails (or model cannot edit images), fallback to **edit-by-reprompt**:
+   - use previous prompt + user change request
+   - generate a new refined prompt
+   - call `generate_image(...)` again.
+4. Return edited image (data URL) or clear error message.
 
-- **Step 1:** `[Image flow] Step 1 – Intent classification: ... intent = 'image'`
-- **Step 2:** `[Image flow] Step 2 – Source context built: N chars ...`
-- **Step 3:** `[Image flow] Step 3 – Refiner LLM: ... Refined prompt (N chars): "..."` (this is what the LLM produced)
-- **Step 4 (OpenRouter):** `[Image flow] OpenRouter: using model '...', prompt length N, prompt preview: "..."`
-- **Step 4 (result):** `[Image flow] Step 4 – Image generated successfully` or `... returned error: ...`
+Code references:
 
-If the refiner fails, you may see: `[Image flow] Step 3 (fallback) – Using user message as prompt: ...`.
-
----m
-
-## Summary table
-
-| Step | Who / what        | Input                          | Output                    |
-|------|-------------------|---------------------------------|---------------------------|
-| 1    | Intent LLM        | Your message                    | `"text"` or `"image"`     |
-| 2    | ContextBuilder    | Source + insights              | Formatted document text   |
-| 3    | Refiner LLM       | Document + your message        | Single image prompt text  |
-| 4    | OpenRouter (image)| Refined prompt                 | Data URL or error string  |
-| 5    | Frontend          | Data URL or error              | Show image or error       |
-
-So: **the LLM is used twice** (intent + refiner); **the image is produced only by the image model** (via OpenRouter) in Step 4.
+- Source chat: `call_source_image_edit_agent()` in `open_notebook/graphs/source_chat.py`
+- Notebook chat: `call_notebook_image_edit_agent()` in `open_notebook/graphs/chat.py`
+- OpenRouter edit utility: `edit_image()` in `open_notebook/utils/openrouter_image.py`
