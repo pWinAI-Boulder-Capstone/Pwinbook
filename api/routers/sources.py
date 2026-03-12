@@ -113,7 +113,7 @@ def parse_source_form_data(
         try:
             notebooks_list = json.loads(notebooks)
         except json.JSONDecodeError:
-            logger.error(f"DEBUG - Invalid JSON in notebooks field: {notebooks}")
+            logger.warning(f"Invalid JSON in notebooks field: {notebooks}")
             raise ValueError("Invalid JSON in notebooks field")
 
     transformations_list = []
@@ -121,8 +121,8 @@ def parse_source_form_data(
         try:
             transformations_list = json.loads(transformations)
         except json.JSONDecodeError:
-            logger.error(
-                f"DEBUG - Invalid JSON in transformations field: {transformations}"
+            logger.warning(
+                f"Invalid JSON in transformations field: {transformations}"
             )
             raise ValueError("Invalid JSON in transformations field")
 
@@ -449,14 +449,14 @@ async def create_source(
                 # Clean up source record on command submission failure
                 try:
                     await source.delete()
-                except Exception:
-                    pass
+                except Exception as delete_err:
+                    logger.warning(f"Failed to clean up source record: {delete_err}")
                 # Clean up uploaded file if we created it
                 if file_path and upload_file:
                     try:
                         os.unlink(file_path)
-                    except Exception:
-                        pass
+                    except Exception as unlink_err:
+                        logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
                 raise HTTPException(
                     status_code=500, detail=f"Failed to queue processing: {str(e)}"
                 )
@@ -502,14 +502,14 @@ async def create_source(
                     # Clean up source record
                     try:
                         await source.delete()
-                    except Exception:
-                        pass
+                    except Exception as delete_err:
+                        logger.warning(f"Failed to clean up source record: {delete_err}")
                     # Clean up uploaded file if we created it
                     if file_path and upload_file:
                         try:
                             os.unlink(file_path)
-                        except Exception:
-                            pass
+                        except Exception as unlink_err:
+                            logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
                     raise HTTPException(
                         status_code=500,
                         detail=f"Processing failed: {result.error_message}",
@@ -555,8 +555,8 @@ async def create_source(
                 if file_path and upload_file:
                     try:
                         os.unlink(file_path)
-                    except Exception:
-                        pass
+                    except Exception as unlink_err:
+                        logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
                 raise
 
     except HTTPException:
@@ -564,16 +564,16 @@ async def create_source(
         if file_path and upload_file:
             try:
                 os.unlink(file_path)
-            except Exception:
-                pass
+            except Exception as unlink_err:
+                logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
         raise
     except InvalidInputError as e:
         # Clean up uploaded file on validation errors if we created it
         if file_path and upload_file:
             try:
                 os.unlink(file_path)
-            except Exception:
-                pass
+            except Exception as unlink_err:
+                logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating source: {str(e)}")
@@ -581,8 +581,8 @@ async def create_source(
         if file_path and upload_file:
             try:
                 os.unlink(file_path)
-            except Exception:
-                pass
+            except Exception as unlink_err:
+                logger.warning(f"Failed to clean up uploaded file: {unlink_err}")
         raise HTTPException(status_code=500, detail=f"Error creating source: {str(e)}")
 
 

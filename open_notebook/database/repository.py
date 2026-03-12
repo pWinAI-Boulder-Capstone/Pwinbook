@@ -85,8 +85,17 @@ async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     data["created"] = datetime.now(timezone.utc)
     data["updated"] = datetime.now(timezone.utc)
     try:
-        async with db_connection() as connection:
-            return parse_record_ids(await connection.insert(table, data))
+        # Use SET with individual parameters so the SDK properly serializes
+        # RecordID objects (nested RecordIDs inside $data dicts are not handled)
+        set_clauses = []
+        params = {}
+        for key, value in data.items():
+            param_name = f"v_{key}"
+            set_clauses.append(f"`{key}` = ${param_name}")
+            params[param_name] = value
+        query = f"CREATE {table} SET {', '.join(set_clauses)};"
+        result = await repo_query(query, params)
+        return result
     except Exception as e:
         logger.exception(e)
         raise RuntimeError("Failed to create record")
@@ -98,15 +107,18 @@ async def repo_relate(
     """Create a relationship between two records with optional data"""
     if data is None:
         data = {}
-    query = f"RELATE {source}->{relationship}->{target} CONTENT $data;"
-    # logger.debug(f"Relate query: {query}")
-
-    return await repo_query(
-        query,
-        {
-            "data": data,
-        },
-    )
+    params: Dict[str, Any] = {
+        "source": ensure_record_id(source),
+        "target": ensure_record_id(target),
+    }
+    set_clauses = []
+    for key, value in data.items():
+        param_name = f"v_{key}"
+        set_clauses.append(f"`{key}` = ${param_name}")
+        params[param_name] = value
+    set_part = f" SET {', '.join(set_clauses)}" if set_clauses else ""
+    query = f"RELATE $source->{relationship}->$target{set_part};"
+    return await repo_query(query, params)
 
 
 async def repo_upsert(
@@ -116,29 +128,43 @@ async def repo_upsert(
     data.pop("id", None)
     if add_timestamp:
         data["updated"] = datetime.now(timezone.utc)
-    query = f"UPSERT {id if id else table} MERGE $data;"
-    return await repo_query(query, {"data": data})
+    target = ensure_record_id(id) if id and ":" in id else (id or table)
+    set_clauses = []
+    params = {"target": target} if isinstance(target, RecordID) else {}
+    for key, value in data.items():
+        param_name = f"v_{key}"
+        set_clauses.append(f"`{key}` = ${param_name}")
+        params[param_name] = value
+    target_ref = "$target" if isinstance(target, RecordID) else target
+    query = f"UPSERT {target_ref} SET {', '.join(set_clauses)};"
+    return await repo_query(query, params)
 
 
 async def repo_update(
     table: str, id: str, data: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
     """Update an existing record by table and id"""
-    # If id already contains the table name, use it as is
     try:
-        if isinstance(id, RecordID) or (":" in id and id.startswith(f"{table}:")):
+        if isinstance(id, RecordID):
             record_id = id
+        elif ":" in id and id.startswith(f"{table}:"):
+            record_id = ensure_record_id(id)
         else:
-            record_id = f"{table}:{id}"
+            record_id = ensure_record_id(f"{table}:{id}")
         data.pop("id", None)
         if "created" in data and isinstance(data["created"], str):
             data["created"] = datetime.fromisoformat(data["created"])
         data["updated"] = datetime.now(timezone.utc)
-        query = f"UPDATE {record_id} MERGE $data;"
-        # logger.debug(f"Update query: {query}")
-        result = await repo_query(query, {"data": data})
-        # if isinstance(result, list):
-        #     return [_return_data(item) for item in result]
+        # Use SET with individual parameters so the SDK properly serializes
+        # RecordID objects (nested RecordIDs inside $data dicts are not handled)
+        set_clauses = []
+        params = {"record_id": record_id}
+        for key, value in data.items():
+            param_name = f"v_{key}"
+            set_clauses.append(f"`{key}` = ${param_name}")
+            params[param_name] = value
+        query = f"UPDATE $record_id SET {', '.join(set_clauses)};"
+        result = await repo_query(query, params)
         return parse_record_ids(result)
     except Exception as e:
         raise RuntimeError(f"Failed to update record: {str(e)}")

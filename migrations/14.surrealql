@@ -1,0 +1,5 @@
+-- Migration 14: Add job tracking fields to flashcard_deck table
+-- These fields track background job status for AI flashcard generation
+
+DEFINE FIELD IF NOT EXISTS job_status_override ON TABLE flashcard_deck TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS job_error ON TABLE flashcard_deck TYPE option<string>;

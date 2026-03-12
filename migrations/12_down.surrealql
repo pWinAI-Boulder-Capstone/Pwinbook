@@ -1,0 +1,9 @@
+-- Migration 12 Down: Remove flashcard tables
+
+DELETE FROM flashcard_session;
+DELETE FROM flashcard;
+DELETE FROM flashcard_deck;
+
+REMOVE TABLE IF EXISTS flashcard_session;
+REMOVE TABLE IF EXISTS flashcard;
+REMOVE TABLE IF EXISTS flashcard_deck;

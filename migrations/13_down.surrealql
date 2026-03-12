@@ -1,0 +1,4 @@
+-- Migration 13 Down: Re-add the incorrect deck_id field (for rollback purposes)
+-- This should not be run unless rolling back the fix
+
+DEFINE FIELD IF NOT EXISTS deck_id ON TABLE flashcard_deck TYPE record<flashcard_deck>;

@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -75,6 +76,7 @@ function safeUrl(value: unknown): string | null {
 }
 
 export default function PodcastStudioPage() {
+  const router = useRouter()
   const { toast } = useToast()
 
   const { data: notebooks = [], isLoading: notebooksLoading } = useNotebooks(false)
@@ -588,11 +590,16 @@ export default function PodcastStudioPage() {
     <AppShell>
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-6 space-y-6">
-          <header className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Podcast Studio (Agentic Script)</h1>
-            <p className="text-muted-foreground">
-              Live, interruptible multi-speaker discussion with optional fact-check (notebook-only or internet).
-            </p>
+          <header className="space-y-1 flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Podcast Studio (Agentic Script)</h1>
+              <p className="text-muted-foreground">
+                Live, interruptible multi-speaker discussion with optional fact-check (notebook-only or internet).
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => router.push('/podcast-studio/history')}>
+              View History
+            </Button>
           </header>
 
           <Card>

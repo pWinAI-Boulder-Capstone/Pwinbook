@@ -1,0 +1,5 @@
+-- Migration 13: Fix flashcard_deck schema - remove incorrect deck_id field
+-- The deck_id field was incorrectly defined on flashcard_deck instead of flashcard table
+
+-- Remove the incorrect deck_id field from flashcard_deck table
+REMOVE FIELD IF EXISTS deck_id ON TABLE flashcard_deck;

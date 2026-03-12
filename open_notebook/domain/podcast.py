@@ -1,5 +1,6 @@
 from typing import Any, ClassVar, Dict, List, Optional, Union
 
+from loguru import logger
 from pydantic import Field, field_validator
 from surrealdb import RecordID
 
@@ -131,7 +132,8 @@ class PodcastEpisode(ObjectModel):
 
             status = await get_command_status(str(self.command))
             return status.status if status else "unknown"
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get command status for {self.command}: {e}")
             return "unknown"
 
     @field_validator("command", mode="before")
@@ -144,9 +146,52 @@ class PodcastEpisode(ObjectModel):
     def _prepare_save_data(self) -> dict:
         """Override to ensure command field is always RecordID format for database"""
         data = super()._prepare_save_data()
-        
+
         # Ensure command field is RecordID format if not None
         if data.get("command") is not None:
             data["command"] = ensure_record_id(data["command"])
-            
+
         return data
+
+
+class StudioSession(ObjectModel):
+    """
+    Studio Session - Stores live podcast studio conversation history.
+
+    Used for persisting multi-agent podcast discussions with human-in-the-loop
+    interrupts and fact-checking. Sessions can be resumed or reviewed later.
+    """
+
+    table_name: ClassVar[str] = "studio_session"
+
+    session_id: str = Field(..., description="Unique session identifier (UUID)")
+    briefing: str = Field(..., description="Briefing/description for the podcast")
+    notebook_id: Optional[str] = Field(None, description="Associated notebook ID")
+    speakers: List[Dict[str, Any]] = Field(default_factory=list, description="Speaker configurations")
+    transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Conversation transcript")
+    fact_check_mode: str = Field(default="both", description="Fact check mode: none, notebook, internet, both")
+    turn_count: int = Field(default=0, description="Number of turns in the session")
+    status: str = Field(default="completed", description="Session status: completed, stopped, error")
+    created_at: Optional[str] = Field(None, description="ISO timestamp of session start")
+
+    @classmethod
+    async def get_by_session_id(cls, session_id: str) -> Optional["StudioSession"]:
+        """Get studio session by session_id"""
+        result = await repo_query(
+            "SELECT * FROM studio_session WHERE session_id = $session_id",
+            {"session_id": session_id}
+        )
+        if result:
+            return cls(**result[0])
+        return None
+
+    async def add_turn(self, speaker: str, text: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Add a speaker turn to the transcript"""
+        turn = {
+            "speaker": speaker,
+            "text": text,
+            "metadata": metadata or {}
+        }
+        self.transcript.append(turn)
+        self.turn_count += 1
+        await self.save()

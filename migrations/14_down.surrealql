@@ -1,0 +1,4 @@
+-- Rollback Migration 14: Remove job tracking fields from flashcard_deck table
+
+REMOVE FIELD IF EXISTS job_status_override ON TABLE flashcard_deck;
+REMOVE FIELD IF EXISTS job_error ON TABLE flashcard_deck;

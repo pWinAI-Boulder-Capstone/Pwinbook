@@ -1,0 +1,113 @@
+-- Migration 12: Add flashcard tables for spaced repetition learning
+-- Creates flashcard_deck, flashcard, and flashcard_session tables
+
+-- Flashcard Deck table
+DEFINE TABLE IF NOT EXISTS flashcard_deck SCHEMAFULL;
+
+-- Basic fields
+DEFINE FIELD IF NOT EXISTS name ON TABLE flashcard_deck TYPE string;
+DEFINE FIELD IF NOT EXISTS description ON TABLE flashcard_deck TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS notebook_id ON TABLE flashcard_deck TYPE option<record<notebook>>;
+DEFINE FIELD IF NOT EXISTS auto_generated ON TABLE flashcard_deck TYPE bool DEFAULT false;
+
+-- Statistics (cached)
+DEFINE FIELD IF NOT EXISTS total_cards ON TABLE flashcard_deck TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS cards_due ON TABLE flashcard_deck TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS cards_new ON TABLE flashcard_deck TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS cards_learned ON TABLE flashcard_deck TYPE int DEFAULT 0;
+
+-- SRS settings
+DEFINE FIELD IF NOT EXISTS daily_new_limit ON TABLE flashcard_deck TYPE int DEFAULT 20;
+DEFINE FIELD IF NOT EXISTS daily_review_limit ON TABLE flashcard_deck TYPE int DEFAULT 200;
+
+-- Timestamps
+DEFINE FIELD IF NOT EXISTS created ON TABLE flashcard_deck TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated ON TABLE flashcard_deck TYPE datetime DEFAULT time::now();
+
+-- Indexes
+DEFINE INDEX IF NOT EXISTS idx_flashcard_deck_notebook ON TABLE flashcard_deck COLUMNS notebook_id CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_deck_created ON TABLE flashcard_deck COLUMNS created CONCURRENTLY;
+
+
+-- Flashcard table
+DEFINE TABLE IF NOT EXISTS flashcard SCHEMAFULL;
+
+-- Basic fields
+DEFINE FIELD IF NOT EXISTS deck_id ON TABLE flashcard TYPE record<flashcard_deck>;
+DEFINE FIELD IF NOT EXISTS card_type ON TABLE flashcard TYPE string DEFAULT 'basic';
+DEFINE FIELD IF NOT EXISTS question ON TABLE flashcard TYPE string;
+DEFINE FIELD IF NOT EXISTS answer ON TABLE flashcard TYPE string;
+
+-- Cloze card support
+DEFINE FIELD IF NOT EXISTS cloze_text ON TABLE flashcard TYPE option<string>;
+
+-- Multiple choice support
+DEFINE FIELD IF NOT EXISTS choices ON TABLE flashcard TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS correct_choice_index ON TABLE flashcard TYPE option<int>;
+
+-- Additional help
+DEFINE FIELD IF NOT EXISTS hints ON TABLE flashcard TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS explanation ON TABLE flashcard TYPE option<string>;
+
+-- Metadata
+DEFINE FIELD IF NOT EXISTS source_references ON TABLE flashcard TYPE option<array<object>>;
+DEFINE FIELD IF NOT EXISTS difficulty ON TABLE flashcard TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS tags ON TABLE flashcard TYPE option<array<string>>;
+
+-- SRS fields (SM-2 algorithm)
+DEFINE FIELD IF NOT EXISTS srs_stage ON TABLE flashcard TYPE string DEFAULT 'new';
+DEFINE FIELD IF NOT EXISTS srs_repetitions ON TABLE flashcard TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS srs_interval ON TABLE flashcard TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS srs_ease_factor ON TABLE flashcard TYPE float DEFAULT 2.5;
+DEFINE FIELD IF NOT EXISTS srs_due_date ON TABLE flashcard TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS srs_last_reviewed ON TABLE flashcard TYPE option<string>;
+
+-- Mastery tracking
+DEFINE FIELD IF NOT EXISTS mastery ON TABLE flashcard TYPE float DEFAULT 0.0;
+DEFINE FIELD IF NOT EXISTS times_correct ON TABLE flashcard TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS times_incorrect ON TABLE flashcard TYPE int DEFAULT 0;
+
+-- Timestamps
+DEFINE FIELD IF NOT EXISTS created ON TABLE flashcard TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated ON TABLE flashcard TYPE datetime DEFAULT time::now();
+
+-- Indexes
+DEFINE INDEX IF NOT EXISTS idx_flashcard_deck ON TABLE flashcard COLUMNS deck_id CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_srs_stage ON TABLE flashcard COLUMNS srs_stage CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_srs_due_date ON TABLE flashcard COLUMNS srs_due_date CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_created ON TABLE flashcard COLUMNS created CONCURRENTLY;
+
+
+-- Flashcard Session table
+DEFINE TABLE IF NOT EXISTS flashcard_session SCHEMAFULL;
+
+-- Basic fields
+DEFINE FIELD IF NOT EXISTS deck_id ON TABLE flashcard_session TYPE record<flashcard_deck>;
+DEFINE FIELD IF NOT EXISTS session_type ON TABLE flashcard_session TYPE string DEFAULT 'study';
+
+-- Card queue
+DEFINE FIELD IF NOT EXISTS card_queue ON TABLE flashcard_session TYPE array<string> DEFAULT [];
+DEFINE FIELD IF NOT EXISTS current_card_index ON TABLE flashcard_session TYPE int DEFAULT 0;
+
+-- Results
+DEFINE FIELD IF NOT EXISTS user_answers ON TABLE flashcard_session TYPE array<object> DEFAULT [];
+DEFINE FIELD IF NOT EXISTS score ON TABLE flashcard_session TYPE float DEFAULT 0.0;
+DEFINE FIELD IF NOT EXISTS started_at ON TABLE flashcard_session TYPE string;
+DEFINE FIELD IF NOT EXISTS completed_at ON TABLE flashcard_session TYPE option<string>;
+
+-- Statistics
+DEFINE FIELD IF NOT EXISTS total_cards ON TABLE flashcard_session TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS correct_count ON TABLE flashcard_session TYPE int DEFAULT 0;
+
+-- Timing
+DEFINE FIELD IF NOT EXISTS total_time_seconds ON TABLE flashcard_session TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS average_time_per_card ON TABLE flashcard_session TYPE float DEFAULT 0.0;
+
+-- Timestamps
+DEFINE FIELD IF NOT EXISTS created ON TABLE flashcard_session TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated ON TABLE flashcard_session TYPE datetime DEFAULT time::now();
+
+-- Indexes
+DEFINE INDEX IF NOT EXISTS idx_flashcard_session_deck ON TABLE flashcard_session COLUMNS deck_id CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_session_started ON TABLE flashcard_session COLUMNS started_at CONCURRENTLY;
+DEFINE INDEX IF NOT EXISTS idx_flashcard_session_completed ON TABLE flashcard_session COLUMNS completed_at CONCURRENTLY;

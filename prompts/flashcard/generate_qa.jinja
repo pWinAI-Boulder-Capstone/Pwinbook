@@ -1,0 +1,46 @@
+You are an expert flashcard writer creating study materials following evidence-based learning principles.
+
+Your task is to create high-quality flashcards from the provided concepts.
+
+## Question Quality Guidelines (based on learning science):
+- **Atomic**: One concept per card (no compound questions)
+- **Clear**: Unambiguous wording, no trick questions
+- **Context-rich**: Include necessary context in the question
+- **Self-contained**: Answer should be definitive, not "see above"
+- **Varied cognitive levels**: Mix recall, comprehension, application
+
+## Card Types:
+1. **basic**: Standard Q&A format
+2. **cloze**: Fill-in-the-blank with {% raw %}{{c1::deletion}}{% endraw %} syntax
+3. **conceptual**: "Why" or "How" questions testing understanding
+4. **applied**: Scenario-based questions applying knowledge
+
+## Answer Quality Guidelines:
+- Complete but concise (2-4 sentences max)
+- Include key terms in context
+- Add mnemonic devices when helpful
+- Provide 1-2 progressive hints (from vague to specific)
+- Include an explanation for why the answer is correct
+
+Concepts to convert:
+{{ concepts }}
+
+Create {{ num_cards }} flashcards with this difficulty distribution:
+{{ difficulty_info }}
+
+Return your response as a JSON array:
+[
+  {
+    "card_type": "basic",
+    "question": "Clear, specific question",
+    "answer": "Complete answer with context",
+    "hints": ["Vague hint", "More specific hint"],
+    "explanation": "Why this answer is correct",
+    "difficulty": "easy",
+    "tags": ["tag1", "tag2"],
+    "source_concept": "Original concept name"
+  },
+  ...
+]
+
+Ensure variety in question types and difficulties. Each card should test a distinct aspect of understanding.

@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union, cast
+from urllib.parse import unquote
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
@@ -64,8 +65,10 @@ class ObjectModel(BaseModel):
         if not id:
             raise InvalidInputError("ID cannot be empty")
         try:
+            # URL-decode the ID first (handles %3A -> :, etc.)
+            decoded_id = unquote(id)
             # Get the table name from the ID (everything before the first colon)
-            table_name = id.split(":")[0] if ":" in id else id
+            table_name = decoded_id.split(":")[0] if ":" in decoded_id else decoded_id
 
             # If we're calling from a specific subclass and IDs match, use that class
             if cls.table_name and cls.table_name == table_name:
@@ -77,11 +80,11 @@ class ObjectModel(BaseModel):
                     raise InvalidInputError(f"No class found for table {table_name}")
                 target_class = cast(Type[T], found_class)
 
-            result = await repo_query("SELECT * FROM $id", {"id": ensure_record_id(id)})
+            result = await repo_query("SELECT * FROM $id", {"id": ensure_record_id(decoded_id)})
             if result:
                 return target_class(**result[0])
             else:
-                raise NotFoundError(f"{table_name} with id {id} not found")
+                raise NotFoundError(f"{table_name} with id {decoded_id} not found")
         except Exception as e:
             logger.error(f"Error fetching object with id {id}: {str(e)}")
             logger.exception(e)

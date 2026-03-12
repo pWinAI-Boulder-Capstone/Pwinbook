@@ -14,6 +14,7 @@ from api.routers import (
     embedding,
     embedding_rebuild,
     episode_profiles,
+    flashcards,
     insights,
     models,
     notebooks,
@@ -25,6 +26,7 @@ from api.routers import (
     source_chat,
     sources,
     speaker_profiles,
+    studio_sessions,
     transformations,
 )
 from api.routers import commands as commands_router
@@ -82,8 +84,8 @@ app = FastAPI(
 )
 
 # Add password authentication middleware first
-# Exclude /api/auth/status, /api/auth/login, and /api/config from authentication
-app.add_middleware(PasswordAuthMiddleware, excluded_paths=["/", "/health", "/docs", "/openapi.json", "/redoc", "/api/auth/status", "/api/auth/login", "/api/config"])
+# Exclude /api/auth/status, /api/auth/login, /api/config, and WebSocket paths from authentication
+app.add_middleware(PasswordAuthMiddleware, excluded_paths=["/", "/health", "/docs", "/openapi.json", "/redoc", "/api/auth/status", "/api/auth/login", "/api/config", "/api/ws/podcast-studio"])
 
 # Add CORS middleware last (so it processes first)
 app.add_middleware(
@@ -116,6 +118,8 @@ app.include_router(episode_profiles.router, prefix="/api", tags=["episode-profil
 app.include_router(speaker_profiles.router, prefix="/api", tags=["speaker-profiles"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(source_chat.router, prefix="/api", tags=["source-chat"])
+app.include_router(studio_sessions.router, prefix="/api", tags=["studio-sessions"])
+app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
 
 
 @app.get("/")

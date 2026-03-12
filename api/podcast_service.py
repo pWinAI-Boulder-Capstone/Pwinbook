@@ -77,8 +77,8 @@ async def _run_workflow_background(
         # reload the episode record to update it
         try:
             episode = await PodcastEpisode.get(episode_id)
-        except Exception:
-            logger.error(f"Episode {episode_id} disappeared during workflow (deleted?)")
+        except Exception as e:
+            logger.error(f"Episode {episode_id} disappeared during workflow (deleted?): {e}")
             return
         if not episode:
             logger.error(f"Episode {episode_id} disappeared during workflow")

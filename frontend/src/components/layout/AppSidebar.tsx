@@ -25,6 +25,7 @@ import { ThemeToggle } from '@/components/common/ThemeToggle'
 import { AddSourceDialog } from '@/components/sources/AddSourceDialog'
 import { CreateNotebookDialog } from '@/components/notebooks/CreateNotebookDialog'
 import { GeneratePodcastDialog } from '@/components/podcasts/GeneratePodcastDialog'
+import { CreateFlashcardDialog } from '@/components/flashcards/CreateFlashcardDialog'
 import { Separator } from '@/components/ui/separator'
 import {
   Book,
@@ -38,13 +39,15 @@ import {
   Menu,
   FileText,
   Plus,
+  Brain,
 } from 'lucide-react'
 
 const mainNav = [
   { name: 'Sources', href: '/sources', icon: FileText, desc: 'Collect' },
   { name: 'Notebooks', href: '/notebooks', icon: Book, desc: 'Organize' },
   { name: 'Podcasts', href: '/podcasts', icon: Mic, desc: 'Create' },
-  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users, desc: 'Customize' },
+  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users, desc: 'Discuss' },
+  { name: 'Flashcards', href: '/flashcards', icon: Brain, desc: 'Study' },
 ] as const
 
 const settingsNav = [
@@ -53,7 +56,7 @@ const settingsNav = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 
-type CreateTarget = 'source' | 'notebook' | 'podcast'
+type CreateTarget = 'source' | 'notebook' | 'podcast' | 'flashcard'
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -64,6 +67,7 @@ export function AppSidebar() {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false)
   const [podcastDialogOpen, setPodcastDialogOpen] = useState(false)
+  const [flashcardDialogOpen, setFlashcardDialogOpen] = useState(false)
 
   const handleCreateSelection = (target: CreateTarget) => {
     setCreateMenuOpen(false)
@@ -74,6 +78,8 @@ export function AppSidebar() {
       setNotebookDialogOpen(true)
     } else if (target === 'podcast') {
       setPodcastDialogOpen(true)
+    } else if (target === 'flashcard') {
+      setFlashcardDialogOpen(true)
     }
   }
 
@@ -207,6 +213,16 @@ export function AppSidebar() {
                 >
                   <Mic className="h-4 w-4" />
                   Podcast
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    handleCreateSelection('flashcard')
+                  }}
+                  className="gap-2"
+                >
+                  <Brain className="h-4 w-4" />
+                  Flashcard
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -365,6 +381,10 @@ export function AppSidebar() {
       <GeneratePodcastDialog
         open={podcastDialogOpen}
         onOpenChange={setPodcastDialogOpen}
+      />
+      <CreateFlashcardDialog
+        open={flashcardDialogOpen}
+        onOpenChange={setFlashcardDialogOpen}
       />
     </TooltipProvider>
   )

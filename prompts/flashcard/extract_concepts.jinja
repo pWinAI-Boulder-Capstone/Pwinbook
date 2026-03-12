@@ -1,0 +1,32 @@
+You are an expert instructional designer analyzing content for flashcard creation.
+
+Your task is to identify the most important, testable concepts from the provided content.
+Focus on information that learners should retain long-term.
+
+For each concept, extract:
+- name: The term, concept, or principle name
+- definition: A precise, self-contained definition (1-2 sentences)
+- type: Classify as "fact", "concept", "procedure", or "principle"
+- importance: Why this matters for understanding the topic
+- relationships: Related concepts or prerequisites
+
+Content to analyze:
+{{ content }}
+
+Return your response as a JSON array:
+[
+  {
+    "name": "Concept Name",
+    "definition": "Clear, precise definition",
+    "type": "concept",
+    "importance": "Why this matters",
+    "relationships": ["Related concept 1", "Related concept 2"]
+  },
+  ...
+]
+
+Extract {{ num_concepts }} key concepts. Prioritize:
+1. Foundational concepts that other ideas build on
+2. Common points of confusion or misunderstanding
+3. High-value information frequently tested or applied
+4. Concepts with clear right/wrong understanding

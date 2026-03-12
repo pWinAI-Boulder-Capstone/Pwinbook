@@ -105,6 +105,11 @@ class AsyncMigrationManager:
             AsyncMigration.from_file("migrations/7.surrealql"),
             AsyncMigration.from_file("migrations/8.surrealql"),
             AsyncMigration.from_file("migrations/9.surrealql"),
+            AsyncMigration.from_file("migrations/10.surrealql"),
+            AsyncMigration.from_file("migrations/11.surrealql"),
+            AsyncMigration.from_file("migrations/12.surrealql"),
+            AsyncMigration.from_file("migrations/13.surrealql"),
+            AsyncMigration.from_file("migrations/14.surrealql"),
         ]
         self.down_migrations = [
             AsyncMigration.from_file("migrations/1_down.surrealql"),
@@ -116,6 +121,11 @@ class AsyncMigrationManager:
             AsyncMigration.from_file("migrations/7_down.surrealql"),
             AsyncMigration.from_file("migrations/8_down.surrealql"),
             AsyncMigration.from_file("migrations/9_down.surrealql"),
+            AsyncMigration.from_file("migrations/10_down.surrealql"),
+            AsyncMigration.from_file("migrations/11_down.surrealql"),
+            AsyncMigration.from_file("migrations/12_down.surrealql"),
+            AsyncMigration.from_file("migrations/13_down.surrealql"),
+            AsyncMigration.from_file("migrations/14_down.surrealql"),
         ]
         self.runner = AsyncMigrationRunner(
             up_migrations=self.up_migrations,

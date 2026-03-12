@@ -86,8 +86,9 @@ class ModelManager:
             # Looks like a SurrealDB record ID (e.g. 'model:abc123')
             try:
                 model = await Model.get(model_id)
-            except Exception:
-                raise ValueError(f"Model with ID {model_id} not found")
+            except Exception as e:
+                logger.error(f"Failed to load model '{model_id}': {e}")
+                raise ValueError(f"Model with ID {model_id} not found") from e
         else:
             # Plain model name (e.g. 'gpt-5-mini') — look up by name
             results = await repo_query(
