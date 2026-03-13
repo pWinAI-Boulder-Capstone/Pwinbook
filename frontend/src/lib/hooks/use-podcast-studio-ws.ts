@@ -33,6 +33,7 @@ function makeSpeakerColorMap(speakers: SpeakerConfig[]): Record<string, number> 
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 16000
 const RECONNECT_MAX_ATTEMPTS = 5
+const WS_TRACE_ID = `ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export interface UsePodcastStudioWsResult {
   messages: ConversationMessage[]
@@ -84,8 +85,16 @@ export function usePodcastStudioWs(): UsePodcastStudioWsResult {
 
     try {
       const apiUrl = await getApiUrl()
-      // Convert http(s):// -> ws(s)://
-      const wsBase = apiUrl.replace(/^http/, 'ws')
+      // Build WebSocket base URL from configured API URL.
+      // Supports absolute URLs and same-origin proxy mode (empty API URL).
+      let wsBase: string
+      if (/^https?:\/\//.test(apiUrl)) {
+        wsBase = apiUrl.replace(/^http/, 'ws')
+      } else {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        const normalizedPrefix = apiUrl && apiUrl.startsWith('/') ? apiUrl : ''
+        wsBase = `${wsProtocol}://${window.location.host}${normalizedPrefix}`
+      }
 
       // Fix 5: Append auth token as query parameter if available
       const authToken = useAuthStore.getState().token
@@ -93,6 +102,13 @@ export function usePodcastStudioWs(): UsePodcastStudioWsResult {
       if (authToken && authToken !== 'not-required') {
         wsUrl += `?token=${encodeURIComponent(authToken)}`
       }
+
+      const joiner = wsUrl.includes('?') ? '&' : '?'
+      wsUrl += `${joiner}trace=${encodeURIComponent(WS_TRACE_ID)}`
+
+      console.log(
+        `[PodcastStudioWS] traceId=${WS_TRACE_ID} connecting isReconnect=${isReconnect} attempt=${reconnectAttemptRef.current} url=${wsUrl}`,
+      )
 
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
@@ -112,6 +128,8 @@ export function usePodcastStudioWs(): UsePodcastStudioWsResult {
             { type: 'system', id: uid(), text: 'Reconnected to studio.' },
           ])
         }
+
+        console.log(`[PodcastStudioWS] traceId=${WS_TRACE_ID} connected`)
       }
 
       ws.onerror = () => {
@@ -126,6 +144,9 @@ export function usePodcastStudioWs(): UsePodcastStudioWsResult {
       }
 
       ws.onclose = (event) => {
+        console.log(
+          `[PodcastStudioWS] traceId=${WS_TRACE_ID} closed code=${event.code} wasClean=${event.wasClean}`,
+        )
         if (wsRef.current === ws) {
           wsRef.current = null
         }

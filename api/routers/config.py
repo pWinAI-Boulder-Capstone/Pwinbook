@@ -133,6 +133,42 @@ async def get_config(request: Request):
 
     Also checks for version updates from GitHub (with caching and error handling).
     """
+    trace_id = request.headers.get("x-on-trace-id", "none")
+    trace_step = request.headers.get("x-on-trace-step", "unknown")
+    client_ip = request.client.host if request.client else "unknown"
+    host = request.headers.get("host", "unknown")
+    origin = request.headers.get("origin", "unknown")
+    referer = request.headers.get("referer", "unknown")
+    forwarded_for = request.headers.get("x-forwarded-for", "unknown")
+    forwarded_host = request.headers.get("x-forwarded-host", "unknown")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "unknown")
+    user_agent = request.headers.get("user-agent", "unknown")
+
+    request_path = "frontend-proxy-or-local" if client_ip in ("127.0.0.1", "::1") else "browser-or-external"
+
+    logger.info(
+        "[CONFIG REQUEST DEBUG] path_hint={} client_ip={} host={} origin={} referer={} xff={} xfh={} xfp={}",
+        request_path,
+        client_ip,
+        host,
+        origin,
+        referer,
+        forwarded_for,
+        forwarded_host,
+        forwarded_proto,
+    )
+
+    logger.info(
+        "[api/config] request trace_id={} trace_step={} client_ip={} host={} origin={} xff={} ua={}",
+        trace_id,
+        trace_step,
+        client_ip,
+        host,
+        origin,
+        forwarded_for,
+        user_agent,
+    )
+
     # Get current version
     current_version = get_version()
 
@@ -153,6 +189,14 @@ async def get_config(request: Request):
 
     if db_status == "offline":
         logger.warning(f"Database offline: {db_health.get('error', 'Unknown error')}")
+
+    logger.info(
+        "[api/config] response trace_id={} version={} has_update={} db_status={}",
+        trace_id,
+        current_version,
+        has_update,
+        db_status,
+    )
 
     return {
         "version": current_version,

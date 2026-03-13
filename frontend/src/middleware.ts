@@ -3,13 +3,21 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const shouldLogProxyDebug = process.env.OPEN_NOTEBOOK_PROXY_DEBUG === 'true'
+
+  if (shouldLogProxyDebug && (pathname.startsWith('/api') || pathname === '/config')) {
+    console.log(
+      `[FRONTEND REQUEST] ${request.method} ${pathname}${request.nextUrl.search} host=${request.headers.get('host') || 'unknown'} origin=${request.headers.get('origin') || 'unknown'} referer=${request.headers.get('referer') || 'unknown'}`,
+    )
+  }
 
   // When API password auth is enabled, also gate the UI site-wide.
   // This prevents anonymous users from loading pages and spamming actions.
   const authEnabled = Boolean(process.env.OPEN_NOTEBOOK_PASSWORD || process.env.FRONTEND_AUTH_ENABLED)
 
-  // Always allow auth/config endpoints and static assets.
+  // Always allow auth/config and API endpoints.
   if (
+    pathname.startsWith('/api') ||
     pathname.startsWith('/site-auth') ||
     pathname === '/login' ||
     pathname === '/config'
@@ -37,6 +45,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|site-auth|config|_next/static|_next/image|favicon.ico).*)',
+    '/((?!site-auth|_next/static|_next/image|favicon.ico).*)',
   ],
 }

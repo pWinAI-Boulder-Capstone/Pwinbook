@@ -173,13 +173,35 @@ async def _persist_session(
 async def podcast_studio_ws(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
+    trace: Optional[str] = Query(None),
 ):
+    trace_id = trace or "none"
+    host = websocket.headers.get("host", "unknown")
+    origin = websocket.headers.get("origin", "unknown")
+    forwarded_for = websocket.headers.get("x-forwarded-for", "unknown")
+    user_agent = websocket.headers.get("user-agent", "unknown")
+    client_ip = websocket.client.host if websocket.client else "unknown"
+
+    logger.info(
+        "[podcast_studio_ws] connect trace_id={} client_ip={} host={} origin={} xff={} ua={}",
+        trace_id,
+        client_ip,
+        host,
+        origin,
+        forwarded_for,
+        user_agent,
+    )
+
     # --- Fix 5: WebSocket authentication ---
     # BaseHTTPMiddleware does not intercept WebSocket upgrades, so we
     # validate the password here before accepting the connection.
     required_password = os.environ.get("OPEN_NOTEBOOK_PASSWORD")
     if required_password:
         if token != required_password:
+            logger.warning(
+                "[podcast_studio_ws] auth rejected trace_id={} reason=missing_or_invalid_token",
+                trace_id,
+            )
             # Reject before accepting — sends HTTP 403 to the upgrade request
             await websocket.close(code=4003, reason="Authentication required")
             return
@@ -187,12 +209,22 @@ async def podcast_studio_ws(
     await websocket.accept()
 
     session_id = str(uuid4())
+    logger.info(
+        "[podcast_studio_ws] accepted trace_id={} session_id={}",
+        trace_id,
+        session_id,
+    )
     await _safe_send(websocket, {"type": "connected", "session_id": session_id})
 
     # Read the "start" message before spawning tasks
     try:
         start_msg = await asyncio.wait_for(websocket.receive_json(), timeout=30)
     except asyncio.TimeoutError:
+        logger.warning(
+            "[podcast_studio_ws] timeout waiting start message trace_id={} session_id={}",
+            trace_id,
+            session_id,
+        )
         await _safe_send(
             websocket,
             {"type": "error", "message": "Timed out waiting for start message."},
@@ -200,11 +232,23 @@ async def podcast_studio_ws(
         await websocket.close()
         return
     except Exception as exc:
+        logger.warning(
+            "[podcast_studio_ws] failed before start trace_id={} session_id={} error={}",
+            trace_id,
+            session_id,
+            exc,
+        )
         await _safe_send(websocket, {"type": "error", "message": str(exc)})
         await websocket.close()
         return
 
     if start_msg.get("type") != "start":
+        logger.warning(
+            "[podcast_studio_ws] invalid first message trace_id={} session_id={} type={}",
+            trace_id,
+            session_id,
+            start_msg.get("type"),
+        )
         await _safe_send(
             websocket,
             {"type": "error", "message": "Expected a 'start' message."},
@@ -409,6 +453,14 @@ async def podcast_studio_ws(
     except Exception as exc:
         logger.error(f"[podcast_studio_ws] runner error: {exc}")
     finally:
+        logger.info(
+            "[podcast_studio_ws] closing trace_id={} session_id={} stop_event={} recv_done={} run_done={}",
+            trace_id,
+            session_id,
+            stop_event.is_set(),
+            recv.done(),
+            run.done(),
+        )
         stop_event.set()
 
         # Cancel the receiver if it is still waiting for WS messages
