@@ -1,0 +1,40 @@
+services:
+  surrealdb:
+    image: 'surrealdb/surrealdb:v2'
+    volumes:
+      - './surreal_data:/mydata'
+    environment:
+      - SURREAL_EXPERIMENTAL_GRAPHQL=true
+    ports:
+      - '8001:8001'
+    command: 'start --log info --user root --pass root --bind 0.0.0.0:8001 rocksdb:/mydata/mydatabase.db'
+    pull_policy: always
+    user: root
+    restart: always
+    labels:
+      - coolify.managed=true
+      - coolify.applicationId=1
+      - coolify.type=application
+
+  open_notebook:
+    build: .
+    ports:
+      - '8502:8502'
+      - '5055:5055'
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      SURREAL_URL: ${SURREAL_URL}
+      SURREAL_USER: ${SURREAL_USER}
+      SURREAL_PASSWORD: ${SURREAL_PASSWORD}
+      SURREAL_NAMESPACE: ${SURREAL_NAMESPACE}
+      SURREAL_DATABASE: ${SURREAL_DATABASE}
+      API_URL: ${API_URL}
+    depends_on:
+      - surrealdb
+    volumes:
+      - './notebook_data:/app/data'
+    restart: always
+    labels:
+      - coolify.managed=true
+      - coolify.applicationId=1
+      - coolify.type=application
