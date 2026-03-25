@@ -4,11 +4,14 @@ import { useState } from 'react'
 import { NotebookResponse } from '@/lib/types/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Archive, ArchiveRestore, Sparkles, Trash2 } from 'lucide-react'
-import { useQuickSummary, useUpdateNotebook, useDeleteNotebook } from '@/lib/hooks/use-notebooks'
+import { Archive, ArchiveRestore, Image as ImageIcon, Sparkles, Trash2 } from 'lucide-react'
+import { useQuickSummary, useQuickSummaryImage, useUpdateNotebook, useDeleteNotebook } from '@/lib/hooks/use-notebooks'
+import { useCreateNote } from '@/lib/hooks/use-notes'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { formatDistanceToNow } from 'date-fns'
 import { InlineEdit } from '@/components/common/InlineEdit'
+import { QuickSummaryImageDialog } from './QuickSummaryImageDialog'
+import { buildGeneratedImageNoteContent } from './generated-image-note'
 
 interface NotebookHeaderProps {
   notebook: NotebookResponse
@@ -17,10 +20,16 @@ interface NotebookHeaderProps {
 
 export function NotebookHeader({ notebook, onQuickSummaryCreated }: NotebookHeaderProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [summaryImageOpen, setSummaryImageOpen] = useState(false)
+  const [summaryImageDataUrl, setSummaryImageDataUrl] = useState<string | null>(null)
+  const [summaryImagePrompt, setSummaryImagePrompt] = useState('')
+  const [summaryNoteId, setSummaryNoteId] = useState<string | undefined>(undefined)
   
   const updateNotebook = useUpdateNotebook()
   const deleteNotebook = useDeleteNotebook()
   const quickSummary = useQuickSummary()
+  const quickSummaryImage = useQuickSummaryImage()
+  const createNote = useCreateNote()
 
   const handleUpdateName = async (name: string) => {
     if (!name || name === notebook.name) return
@@ -62,7 +71,37 @@ export function NotebookHeader({ notebook, onQuickSummaryCreated }: NotebookHead
       }
     })
     if (result?.note?.id) {
+      setSummaryNoteId(result.note.id)
       onQuickSummaryCreated?.(result.note.id)
+    }
+  }
+
+  const handleGenerateSummaryImage = async () => {
+    setSummaryImageOpen(true)
+    try {
+      const result = await quickSummaryImage.mutateAsync({
+        id: notebook.id,
+        data: {
+          note_id: summaryNoteId,
+        },
+      })
+      setSummaryImageDataUrl(result.image_data_url)
+      setSummaryImagePrompt(result.prompt)
+      if (result.note?.id) {
+        setSummaryNoteId(result.note.id)
+      }
+      await createNote.mutateAsync({
+        notebook_id: notebook.id,
+        note_type: 'ai',
+        title: `Generated Image - ${notebook.name}`,
+        content: buildGeneratedImageNoteContent(
+          result.image_data_url,
+          result.prompt,
+          result.note?.id
+        ),
+      })
+    } catch {
+      // Error toast is handled by the mutation.
     }
   }
 
@@ -92,6 +131,16 @@ export function NotebookHeader({ notebook, onQuickSummaryCreated }: NotebookHead
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                 {quickSummary.isPending ? 'Summarizing…' : 'Summary'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateSummaryImage}
+                disabled={quickSummary.isPending || quickSummaryImage.isPending}
+                className="h-8"
+              >
+                <ImageIcon className="h-3.5 w-3.5 mr-1.5" />
+                {quickSummaryImage.isPending ? 'Generating…' : 'Summary Image'}
               </Button>
               <Button
                 variant="ghost"
@@ -139,6 +188,15 @@ export function NotebookHeader({ notebook, onQuickSummaryCreated }: NotebookHead
         confirmText="Delete Forever"
         confirmVariant="destructive"
         onConfirm={handleDelete}
+      />
+
+      <QuickSummaryImageDialog
+        open={summaryImageOpen}
+        onOpenChange={setSummaryImageOpen}
+        imageDataUrl={summaryImageDataUrl}
+        prompt={summaryImagePrompt}
+        isGenerating={quickSummaryImage.isPending}
+        onGenerate={handleGenerateSummaryImage}
       />
     </>
   )

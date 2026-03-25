@@ -123,6 +123,25 @@ class APIClient:
             "POST", f"/api/notebooks/{notebook_id}/quick-summary", json=data
         )
 
+    def quick_summary_image(
+        self,
+        notebook_id: str,
+        note_id: Optional[str] = None,
+        prompt_override: Optional[str] = None,
+        model_override: Optional[str] = None,
+    ) -> Union[Dict[Any, Any], List[Dict[Any, Any]]]:
+        """Generate an image from a notebook quick summary note."""
+        data: Dict[str, Any] = {}
+        if note_id is not None:
+            data["note_id"] = note_id
+        if prompt_override is not None:
+            data["prompt_override"] = prompt_override
+        if model_override is not None:
+            data["model_override"] = model_override
+        return self._make_request(
+            "POST", f"/api/notebooks/{notebook_id}/quick-summary-image", json=data
+        )
+
     # Search API methods
     def search(
         self,
