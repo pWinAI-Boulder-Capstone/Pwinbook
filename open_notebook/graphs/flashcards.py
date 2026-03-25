@@ -115,7 +115,7 @@ Your task is to create high-quality flashcards from the provided concepts.
 
 ## Card Types:
 1. **basic**: Standard Q&A format
-2. **cloze**: Fill-in-the-blank with {% raw %}{{c1::deletion}}{% endraw %} syntax
+2. **cloze**: Fill-in-the-blank. IMPORTANT: The "question" field must show blanks (use "_____"), NOT the cloze syntax. Do NOT include {{c1::...}} in the question. The answer should only appear in the "answer" field.
 3. **conceptual**: "Why" or "How" questions testing understanding
 4. **applied**: Scenario-based questions applying knowledge
 
@@ -162,6 +162,7 @@ Guidelines:
 - Keep surrounding context intact
 - Ensure the answer is uniquely determined by the context
 - Create 1-2 cloze cards per concept
+- CRITICAL: The "question" field must NOT contain the answer or cloze syntax. It should be the sentence with a blank (e.g. "_____") replacing the hidden term.
 
 Concepts:
 {{ concepts }}
@@ -172,7 +173,7 @@ Return your response as a JSON array:
     "card_type": "cloze",
     "cloze_text": "A sentence with the key term replaced like this: {% raw %}{{c1::the answer}}{% endraw %}",
     "answer": "The clozed term",
-    "question": "What term completes this: A sentence with [...] replaced?",
+    "question": "A sentence with the key term replaced like this: _____",
     "hints": ["First letter hint"],
     "difficulty": "medium",
     "source_concept": "Concept name"
@@ -252,6 +253,25 @@ def _run_async_in_sync(coro_fn):
             return future.result()
     except RuntimeError:
         return run()
+
+
+def _process_cloze_question(question: str, answer: str) -> tuple[str, str]:
+    """Strip {{c1::...}} syntax from cloze questions.
+
+    Returns (clean_question, extracted_answer) where the cloze deletion
+    is replaced with a blank placeholder and the answer is extracted.
+    """
+    cloze_pattern = re.compile(r"\{\{c\d+::(.*?)\}\}")
+    match = cloze_pattern.search(question)
+    if match:
+        # Extract the answer from the cloze syntax if not already set
+        extracted = match.group(1).strip()
+        if not answer:
+            answer = extracted
+        # Replace the cloze syntax with a blank
+        clean_question = cloze_pattern.sub("_____", question)
+        return clean_question, answer
+    return question, answer
 
 
 def _parse_json_response(text: str, expected_type: str = "list") -> Any:
@@ -442,11 +462,17 @@ def generate_flashcards_node(state: FlashcardGraphState) -> dict:
             ):
                 continue
 
+            question = str(fc.get("question", ""))[:500]
+            answer = str(fc.get("answer", ""))[:1000]
+
+            # Strip cloze syntax from question so the answer isn't leaked
+            question, answer = _process_cloze_question(question, answer)
+
             normalized.append(
                 {
                     "card_type": fc.get("card_type", "basic"),
-                    "question": str(fc.get("question", ""))[:500],
-                    "answer": str(fc.get("answer", ""))[:1000],
+                    "question": question,
+                    "answer": answer,
                     "hints": list(fc.get("hints", []))[:3],
                     "explanation": fc.get("explanation", ""),
                     "difficulty": fc.get("difficulty", "medium"),
@@ -519,12 +545,26 @@ def _generate_cloze_cards(concepts: List[Dict], num_cloze: int) -> List[Dict]:
         for card in cloze_cards:
             if not card.get("cloze_text"):
                 continue
+
+            question = card.get("question", "Complete this statement")
+            answer = card.get("answer", "")
+
+            # Strip cloze syntax from question so the answer isn't leaked
+            question, answer = _process_cloze_question(question, answer)
+            # Also process the cloze_text to derive a clean question if needed
+            cloze_text = card.get("cloze_text", "")
+            if "{{c" in question or question == "Complete this statement":
+                # Generate a clean question from cloze_text
+                clean_q, _ = _process_cloze_question(cloze_text, "")
+                if clean_q != cloze_text:
+                    question = clean_q
+
             normalized.append(
                 {
                     "card_type": "cloze",
-                    "question": card.get("question", "Complete this statement"),
-                    "answer": card.get("answer", ""),
-                    "cloze_text": card.get("cloze_text", ""),
+                    "question": question,
+                    "answer": answer,
+                    "cloze_text": cloze_text,
                     "hints": card.get("hints", []),
                     "difficulty": card.get("difficulty", "medium"),
                     "tags": [],

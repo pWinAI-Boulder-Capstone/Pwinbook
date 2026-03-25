@@ -77,7 +77,9 @@ class FlashcardCardResponse(BaseModel):
     deck_id: str
     question: str
     answer: str
+    card_type: Optional[str] = None
     hints: Optional[List[str]] = None
+    explanation: Optional[str] = None
     difficulty: Optional[str] = None
     tags: Optional[List[str]] = None
 
@@ -436,7 +438,9 @@ async def get_deck_cards(deck_id: str):
                 deck_id=card.deck_id,
                 question=card.question,
                 answer=card.answer,
+                card_type=card.card_type,
                 hints=card.hints,
+                explanation=card.explanation,
                 difficulty=card.difficulty,
                 tags=card.tags,
             )
