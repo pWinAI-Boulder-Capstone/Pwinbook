@@ -88,6 +88,18 @@ export interface NotebookQuickSummaryResponse {
   context_meta: Record<string, unknown>
 }
 
+export interface NotebookQuickSummaryImageRequest {
+  note_id?: string
+  prompt_override?: string
+  model_override?: string
+}
+
+export interface NotebookQuickSummaryImageResponse {
+  note: NoteResponse
+  prompt: string
+  image_data_url: string
+}
+
 export interface CreateNoteRequest {
   title?: string
   content: string

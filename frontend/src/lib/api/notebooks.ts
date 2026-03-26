@@ -4,7 +4,9 @@ import {
   CreateNotebookRequest,
   UpdateNotebookRequest,
   NotebookQuickSummaryRequest,
-  NotebookQuickSummaryResponse
+  NotebookQuickSummaryResponse,
+  NotebookQuickSummaryImageRequest,
+  NotebookQuickSummaryImageResponse
 } from '@/lib/types/api'
 
 export const notebooksApi = {
@@ -35,6 +37,14 @@ export const notebooksApi = {
   quickSummary: async (id: string, data: NotebookQuickSummaryRequest) => {
     const response = await apiClient.post<NotebookQuickSummaryResponse>(
       `/notebooks/${id}/quick-summary`,
+      data
+    )
+    return response.data
+  },
+
+  quickSummaryImage: async (id: string, data: NotebookQuickSummaryImageRequest) => {
+    const response = await apiClient.post<NotebookQuickSummaryImageResponse>(
+      `/notebooks/${id}/quick-summary-image`,
       data
     )
     return response.data

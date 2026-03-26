@@ -213,6 +213,29 @@ class NotebookQuickSummaryResponse(BaseModel):
     )
 
 
+class NotebookQuickSummaryImageRequest(BaseModel):
+    note_id: Optional[str] = Field(
+        None,
+        description="Optional summary note ID. If omitted, the latest AI quick summary note is used.",
+    )
+    prompt_override: Optional[str] = Field(
+        None,
+        description="Optional prompt override to skip prompt refinement and generate directly.",
+    )
+    model_override: Optional[str] = Field(
+        None,
+        description="Optional model override for prompt refinement.",
+    )
+
+
+class NotebookQuickSummaryImageResponse(BaseModel):
+    note: NoteResponse = Field(..., description="Summary note used for image generation")
+    prompt: str = Field(..., description="Final image prompt used to generate the image")
+    image_data_url: str = Field(
+        ..., description="Generated image as data URL (data:image/...)"
+    )
+
+
 # Embedding API models
 class EmbedRequest(BaseModel):
     item_id: str = Field(..., description="ID of the item to embed")

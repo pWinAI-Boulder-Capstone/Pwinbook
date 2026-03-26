@@ -1,21 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { AppShell } from '@/components/layout/AppShell'
 import { NotebookHeader } from '../components/NotebookHeader'
 import { SourcesColumn } from '../components/SourcesColumn'
 import { NotesColumn } from '../components/NotesColumn'
+import { GeneratedImagesColumn } from '../components/GeneratedImagesColumn'
 import { ChatColumn } from '../components/ChatColumn'
 import { useNotebook } from '@/lib/hooks/use-notebooks'
 import { useSources } from '@/lib/hooks/use-sources'
 import { useNotes } from '@/lib/hooks/use-notes'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileText, StickyNote, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { FileText, StickyNote, Image as ImageIcon, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isGeneratedImageNote } from '../components/generated-image-note'
 
 export type ContextMode = 'off' | 'insights' | 'full'
 
@@ -30,9 +32,19 @@ export default function NotebookPage() {
 
   const { data: notebook, isLoading: notebookLoading } = useNotebook(notebookId)
   const { data: sources, isLoading: sourcesLoading, refetch: refetchSources } = useSources(notebookId)
-  const { data: notes, isLoading: notesLoading } = useNotes(notebookId)
+  const { data: allNotes, isLoading: notesLoading } = useNotes(notebookId)
   const [autoOpenNoteId, setAutoOpenNoteId] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(true)
+
+  const notes = useMemo(() => allNotes ?? [], [allNotes])
+  const regularNotes = useMemo(
+    () => notes.filter((note) => !isGeneratedImageNote(note)),
+    [notes]
+  )
+  const generatedImageNotes = useMemo(
+    () => notes.filter((note) => isGeneratedImageNote(note)),
+    [notes]
+  )
 
   // Context selection state
   const [contextSelections, setContextSelections] = useState<ContextSelections>({
@@ -57,10 +69,10 @@ export default function NotebookPage() {
 
   // Initialize default context selections when notes load
   useEffect(() => {
-    if (notes && notes.length > 0) {
+    if (regularNotes && regularNotes.length > 0) {
       setContextSelections(prev => {
         const newNoteSelections = { ...prev.notes }
-        notes.forEach(note => {
+        regularNotes.forEach(note => {
           if (!(note.id in newNoteSelections)) {
             newNoteSelections[note.id] = 'full'
           }
@@ -68,7 +80,7 @@ export default function NotebookPage() {
         return { ...prev, notes: newNoteSelections }
       })
     }
-  }, [notes])
+  }, [regularNotes])
 
   const handleContextModeChange = (itemId: string, mode: ContextMode, type: 'source' | 'note') => {
     setContextSelections(prev => ({
@@ -104,7 +116,8 @@ export default function NotebookPage() {
   }
 
   const sourceCount = sources?.length ?? 0
-  const noteCount = notes?.length ?? 0
+  const noteCount = regularNotes.length
+  const generatedImageCount = generatedImageNotes.length
 
   return (
     <AppShell>
@@ -148,6 +161,18 @@ export default function NotebookPage() {
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="generated-images"
+                    className="relative h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 gap-2"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    Generated Images
+                    {generatedImageCount > 0 && (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                        {generatedImageCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Chat toggle button */}
@@ -185,13 +210,20 @@ export default function NotebookPage() {
 
               <TabsContent value="notes" className="flex-1 overflow-y-auto mt-0 p-6">
                 <NotesColumn
-                  notes={notes}
+                  notes={regularNotes}
                   isLoading={notesLoading}
                   notebookId={notebookId}
                   contextSelections={contextSelections.notes}
                   onContextModeChange={(noteId, mode) => handleContextModeChange(noteId, mode, 'note')}
                   autoOpenNoteId={autoOpenNoteId ?? undefined}
                   onAutoOpenHandled={() => setAutoOpenNoteId(null)}
+                />
+              </TabsContent>
+
+              <TabsContent value="generated-images" className="flex-1 overflow-y-auto mt-0 p-6">
+                <GeneratedImagesColumn
+                  notes={generatedImageNotes}
+                  isLoading={notesLoading}
                 />
               </TabsContent>
             </Tabs>
