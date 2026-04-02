@@ -310,10 +310,15 @@ export default function FlashcardStudyPage() {
         </div>
 
         {/* Flashcard */}
-        <div>
+        <div className="pointer-events-none">
           <Card
-            className="min-h-[400px] cursor-pointer transition-shadow duration-300 hover:shadow-xl"
-            onClick={() => !showAnswer && handleShowAnswer()}
+            className="min-h-[400px] cursor-pointer transition-shadow duration-300 hover:shadow-xl pointer-events-auto"
+            onClick={(e) => {
+              if (!showAnswer) {
+                e.stopPropagation()
+                handleShowAnswer()
+              }
+            }}
           >
             <CardHeader className="space-y-4">
               <div className="flex justify-between items-start">
