@@ -11,9 +11,11 @@ export function middleware(request: NextRequest) {
     )
   }
 
-  // When API password auth is enabled, also gate the UI site-wide.
-  // This prevents anonymous users from loading pages and spamming actions.
-  const authEnabled = Boolean(process.env.OPEN_NOTEBOOK_PASSWORD || process.env.FRONTEND_AUTH_ENABLED)
+  // Default to frontend auth being enabled so it matches backend admin/admin fallback.
+  // An explicitly empty OPEN_NOTEBOOK_PASSWORD keeps the old "auth disabled" behavior.
+  const authEnabled =
+    process.env.FRONTEND_AUTH_ENABLED !== 'false' &&
+    process.env.OPEN_NOTEBOOK_PASSWORD !== ''
 
   // Always allow auth/config and API endpoints.
   if (
