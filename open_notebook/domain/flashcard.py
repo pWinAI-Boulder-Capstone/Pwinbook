@@ -160,8 +160,15 @@ class FlashcardDeck(ObjectModel):
         if not result:
             return []
         cards = []
+        valid_card_types = {"basic", "cloze", "reverse", "multiple_choice"}
+        valid_difficulties = {"easy", "medium", "hard"}
         for card_data in result:
             try:
+                # Normalize fields that may have invalid values from DB
+                if card_data.get("card_type") not in valid_card_types:
+                    card_data["card_type"] = "basic"
+                if card_data.get("difficulty") not in valid_difficulties:
+                    card_data["difficulty"] = "medium"
                 cards.append(Flashcard(**card_data))
             except Exception as e:
                 logger.warning(f"Failed to parse card {card_data.get('id')}: {e}")
@@ -315,7 +322,21 @@ class Flashcard(ObjectModel):
             "SELECT * FROM flashcard WHERE deck_id = $deck_id ORDER BY created ASC",
             {"deck_id": ensure_record_id(deck_id)},
         )
-        return [cls(**card) for card in result] if result else []
+        if not result:
+            return []
+        valid_card_types = {"basic", "cloze", "reverse", "multiple_choice"}
+        valid_difficulties = {"easy", "medium", "hard"}
+        cards = []
+        for card in result:
+            try:
+                if card.get("card_type") not in valid_card_types:
+                    card["card_type"] = "basic"
+                if card.get("difficulty") not in valid_difficulties:
+                    card["difficulty"] = "medium"
+                cards.append(cls(**card))
+            except Exception as e:
+                logger.warning(f"Failed to parse card {card.get('id')}: {e}")
+        return cards
 
     @classmethod
     async def get_due_for_deck(cls, deck_id: str, limit: int = 50) -> List["Flashcard"]:
@@ -330,7 +351,21 @@ class Flashcard(ObjectModel):
             """,
             {"deck_id": ensure_record_id(deck_id), "limit": limit},
         )
-        return [cls(**card) for card in result] if result else []
+        if not result:
+            return []
+        valid_card_types = {"basic", "cloze", "reverse", "multiple_choice"}
+        valid_difficulties = {"easy", "medium", "hard"}
+        cards = []
+        for card in result:
+            try:
+                if card.get("card_type") not in valid_card_types:
+                    card["card_type"] = "basic"
+                if card.get("difficulty") not in valid_difficulties:
+                    card["difficulty"] = "medium"
+                cards.append(cls(**card))
+            except Exception as e:
+                logger.warning(f"Failed to parse card {card.get('id')}: {e}")
+        return cards
 
     def update_srs(self, quality: int) -> None:
         """
@@ -564,7 +599,7 @@ class FlashcardSession(ObjectModel):
         if len(self.user_answers) > 0:
             self.score = round((self.correct_count / len(self.user_answers)) * 100, 2)
             self.average_time_per_card = sum(
-                a["time_spent"] for a in self.user_answers
+                a.get("time_spent", 0.0) for a in self.user_answers
             ) / len(self.user_answers)
 
     def complete(self) -> None:

@@ -1,4 +1,5 @@
 import asyncio
+import re
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
 from loguru import logger
@@ -11,6 +12,8 @@ from open_notebook.domain.base import ObjectModel
 from open_notebook.domain.models import model_manager
 from open_notebook.exceptions import DatabaseOperationError, InvalidInputError
 from open_notebook.utils import split_text
+
+IMAGE_DATA_URL_RE = re.compile(r"data:image/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+")
 
 
 class Notebook(ObjectModel):
@@ -384,7 +387,14 @@ class Note(ObjectModel):
         return True
 
     def get_embedding_content(self) -> Optional[str]:
-        return self.content
+        if not self.content:
+            return None
+        # Avoid embedding very large base64 payloads while keeping surrounding text searchable.
+        cleaned = IMAGE_DATA_URL_RE.sub("[image-data-omitted]", self.content)
+        max_chars = 12_000
+        if len(cleaned) > max_chars:
+            cleaned = cleaned[:max_chars]
+        return cleaned
 
 
 class ChatSession(ObjectModel):

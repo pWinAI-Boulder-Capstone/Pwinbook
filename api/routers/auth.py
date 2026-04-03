@@ -7,6 +7,13 @@ import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from api.auth import get_expected_password, is_password_auth_enabled
+
+DEFAULT_AUTH_USERNAME = "pwinbook"
+
+
+def get_expected_username() -> str:
+    return os.environ.get("OPEN_NOTEBOOK_USERNAME", DEFAULT_AUTH_USERNAME)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,7 +37,7 @@ async def get_auth_status():
     Check if authentication is enabled.
     Returns whether a password is required to access the API.
     """
-    auth_enabled = bool(os.environ.get("OPEN_NOTEBOOK_PASSWORD"))
+    auth_enabled = is_password_auth_enabled()
 
     return {
         "auth_enabled": auth_enabled,
@@ -45,11 +52,11 @@ async def login(login_request: LoginRequest):
     Validates both username and password against environment variables.
     Returns a token (password) on success.
     """
-    expected_password = os.environ.get("OPEN_NOTEBOOK_PASSWORD")
-    expected_username = os.environ.get("OPEN_NOTEBOOK_USERNAME")
+    expected_password = get_expected_password()
+    expected_username = get_expected_username()
     
-    # If no password is set, authentication is disabled
-    if not expected_password:
+    # If password is explicitly blank, authentication is disabled
+    if not is_password_auth_enabled():
         return LoginResponse(
             success=True,
             message="Authentication is disabled",
@@ -57,13 +64,11 @@ async def login(login_request: LoginRequest):
         )
     
     # Validate username (case-insensitive for email addresses)
-    if expected_username:
-        # Compare emails/usernames case-insensitively
-        if login_request.username.strip().lower() != expected_username.strip().lower():
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid username or password"
-            )
+    if login_request.username.strip().lower() != expected_username.strip().lower():
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
     
     # Validate password
     if login_request.password != expected_password:

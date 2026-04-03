@@ -17,52 +17,35 @@ import { NextRequest, NextResponse } from 'next/server'
  *
  * Auto-detection logic for API_URL:
  * 1. If API_URL env var is set, use it (explicit override)
- * 2. Otherwise, detect from incoming HTTP request headers (zero-config)
- * 3. Fallback to localhost:5055 if detection fails
+ * 2. Otherwise, use same-origin proxying (empty base URL)
  *
  * This allows the same Docker image to work in different deployment scenarios.
  */
 export async function GET(request: NextRequest) {
+  const traceId = request.headers.get('x-on-trace-id') || 'none'
+  const traceStep = request.headers.get('x-on-trace-step') || 'unknown'
+  const hostHeader = request.headers.get('host') || 'unknown'
+  const forwardedFor = request.headers.get('x-forwarded-for') || 'unknown'
+  const userAgent = request.headers.get('user-agent') || 'unknown'
+
+  console.log(
+    `[runtime-config] request traceId=${traceId} step=${traceStep} host=${hostHeader} xff=${forwardedFor} ua=${userAgent}`,
+  )
+
   // Priority 1: Check if API_URL is explicitly set
   const envApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL
 
   if (envApiUrl) {
+    console.log(`[runtime-config] traceId=${traceId} resolved source=env apiUrl=${envApiUrl}`)
     return NextResponse.json({
       apiUrl: envApiUrl,
     })
   }
 
-  // Priority 2: Auto-detect from request headers
-  try {
-    // Get the protocol (http or https)
-    // Check X-Forwarded-Proto first (for reverse proxies), then fallback to request scheme
-    const proto = request.headers.get('x-forwarded-proto') ||
-                  request.nextUrl.protocol.replace(':', '') ||
-                  'http'
-
-    // Get the host header (includes port if non-standard)
-    const hostHeader = request.headers.get('host')
-
-    if (hostHeader) {
-      // Extract just the hostname (remove port if present)
-      const hostname = hostHeader.split(':')[0]
-
-      // Construct the API URL with port 5055
-      const apiUrl = `${proto}://${hostname}:5055`
-
-      console.log(`[runtime-config] Auto-detected API URL: ${apiUrl} (proto=${proto}, host=${hostHeader})`)
-
-      return NextResponse.json({
-        apiUrl,
-      })
-    }
-  } catch (error) {
-    console.error('[runtime-config] Auto-detection failed:', error)
-  }
-
-  // Priority 3: Fallback to localhost
-  console.log('[runtime-config] Using fallback: http://localhost:5055')
+  // Priority 2: same-origin proxy mode via Next.js rewrites (/api/*)
+  // Returning an empty base URL avoids direct browser calls to host:5055.
+  console.log(`[runtime-config] traceId=${traceId} resolved source=same-origin-proxy apiUrl=(empty)`)
   return NextResponse.json({
-    apiUrl: 'http://localhost:5055',
+    apiUrl: '',
   })
 }

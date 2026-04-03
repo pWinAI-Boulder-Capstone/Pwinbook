@@ -1,12 +1,15 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
 from ai_prompter import Prompter
 
 from api.models import (
     NotebookCreate,
+    NotebookQuickSummaryImageRequest,
+    NotebookQuickSummaryImageResponse,
     NotebookQuickSummaryRequest,
     NotebookQuickSummaryResponse,
     NotebookResponse,
@@ -19,8 +22,124 @@ from open_notebook.exceptions import InvalidInputError
 from open_notebook.graphs.utils import provision_langchain_model
 from open_notebook.utils import clean_thinking_content
 from open_notebook.utils.context_builder import ContextConfig, build_notebook_context
+from open_notebook.utils.openrouter_image import generate_image
 
 router = APIRouter()
+
+SUMMARY_IMAGE_PROMPT_REFINER_SYSTEM = """You are a prompt writer for an image generation model.
+Convert the notebook quick summary into a single, vivid visual prompt.
+- Preserve factual content from the summary.
+- Prefer a clean editorial infographic style with clear structure.
+- Avoid adding facts not present in the summary.
+- Output only the final prompt text, no preamble."""
+
+
+def _is_quick_summary_note(note: Note) -> bool:
+    title = (note.title or "").strip().lower()
+    return note.note_type == "ai" and title.startswith("quick summary")
+
+
+async def _resolve_summary_note(
+    notebook: Notebook, notebook_id: str, note_id: Optional[str]
+) -> Note:
+    full_notebook_id = (
+        notebook_id if notebook_id.startswith("notebook:") else f"notebook:{notebook_id}"
+    )
+
+    if note_id:
+        full_note_id = note_id if note_id.startswith("note:") else f"note:{note_id}"
+        note = await Note.get(full_note_id)
+        if not note:
+            raise HTTPException(status_code=404, detail="Summary note not found")
+        relation = await repo_query(
+            "SELECT * FROM artifact WHERE in = $note_id AND out = $notebook_id LIMIT 1",
+            {
+                "note_id": ensure_record_id(full_note_id),
+                "notebook_id": ensure_record_id(full_notebook_id),
+            },
+        )
+        if not relation:
+            raise HTTPException(
+                status_code=404,
+                detail="Summary note is not associated with this notebook",
+            )
+        return note
+
+    notebook_notes = await notebook.get_notes()
+    quick_summary_candidates = [
+        candidate for candidate in notebook_notes if _is_quick_summary_note(candidate)
+    ]
+    if not quick_summary_candidates:
+        raise HTTPException(
+            status_code=404,
+            detail="No quick summary note found. Generate a quick summary first.",
+        )
+
+    latest_note_ref = quick_summary_candidates[0]
+    if not latest_note_ref.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not resolve the latest quick summary note.",
+        )
+    latest_full_note = await Note.get(latest_note_ref.id)
+    if not latest_full_note:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not load the latest quick summary note content.",
+        )
+    return latest_full_note
+
+
+async def _refine_summary_image_prompt(
+    notebook: Notebook,
+    summary_note: Note,
+    prompt_override: Optional[str],
+    model_override: Optional[str],
+) -> str:
+    if prompt_override and prompt_override.strip():
+        return prompt_override.strip()
+
+    summary_content = (summary_note.content or "").strip()
+    if not summary_content:
+        raise HTTPException(
+            status_code=400,
+            detail="Summary note content is empty and cannot be used for image generation.",
+        )
+
+    fallback_prompt = (
+        f"Create a polished editorial infographic that visualizes this notebook summary. "
+        f"Notebook: {notebook.name}\nSummary:\n{summary_content[:5000]}"
+    )
+
+    try:
+        model = await provision_langchain_model(
+            summary_content[:2000],
+            model_override,
+            "chat",
+            max_tokens=900,
+        )
+        user_msg = (
+            f"Notebook: {notebook.name}\n"
+            f"Notebook description: {notebook.description}\n\n"
+            f"Quick summary note title: {summary_note.title}\n"
+            f"Quick summary note content:\n{summary_content[:20000]}"
+        )
+        ai_message = await model.ainvoke(
+            [
+                SystemMessage(content=SUMMARY_IMAGE_PROMPT_REFINER_SYSTEM),
+                HumanMessage(content=user_msg),
+            ]
+        )
+        raw_prompt = (
+            ai_message.content
+            if isinstance(ai_message.content, str)
+            else str(ai_message.content)
+        )
+        refined_prompt = clean_thinking_content(raw_prompt).strip()
+        return refined_prompt or fallback_prompt
+    except Exception as e:
+        logger.warning(f"Prompt refinement failed, using fallback prompt: {e}")
+        return fallback_prompt
 
 
 @router.get("/notebooks", response_model=List[NotebookResponse])
@@ -253,6 +372,61 @@ async def quick_summary(notebook_id: str, request: NotebookQuickSummaryRequest):
         logger.exception(e)
         raise HTTPException(
             status_code=500, detail=f"Failed to generate summary: {str(e)}"
+        )
+
+
+@router.post(
+    "/notebooks/{notebook_id}/quick-summary-image",
+    response_model=NotebookQuickSummaryImageResponse,
+)
+async def quick_summary_image(
+    notebook_id: str, request: NotebookQuickSummaryImageRequest
+):
+    """Generate an image for a notebook quick summary note."""
+    try:
+        full_notebook_id = (
+            notebook_id if notebook_id.startswith("notebook:") else f"notebook:{notebook_id}"
+        )
+        notebook = await Notebook.get(full_notebook_id)
+        if not notebook:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+
+        summary_note = await _resolve_summary_note(notebook, notebook_id, request.note_id)
+        prompt = await _refine_summary_image_prompt(
+            notebook=notebook,
+            summary_note=summary_note,
+            prompt_override=request.prompt_override,
+            model_override=request.model_override,
+        )
+        image_result = await generate_image(prompt)
+        if not image_result.startswith("data:image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=image_result,
+            )
+
+        return NotebookQuickSummaryImageResponse(
+            note=NoteResponse(
+                id=summary_note.id or "",
+                title=summary_note.title,
+                content=summary_note.content,
+                note_type=summary_note.note_type,
+                created=str(summary_note.created),
+                updated=str(summary_note.updated),
+            ),
+            prompt=prompt,
+            image_data_url=image_result,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error generating quick summary image for notebook {notebook_id}: {e}"
+        )
+        logger.exception(e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate quick summary image: {str(e)}",
         )
 
 

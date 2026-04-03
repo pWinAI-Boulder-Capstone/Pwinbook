@@ -115,7 +115,7 @@ Your task is to create high-quality flashcards from the provided concepts.
 
 ## Card Types:
 1. **basic**: Standard Q&A format
-2. **cloze**: Fill-in-the-blank with {% raw %}{{c1::deletion}}{% endraw %} syntax
+2. **cloze**: Fill-in-the-blank. IMPORTANT: The "question" field must show blanks (use "_____"), NOT the cloze syntax. Do NOT include {{c1::...}} in the question. The answer should only appear in the "answer" field.
 3. **conceptual**: "Why" or "How" questions testing understanding
 4. **applied**: Scenario-based questions applying knowledge
 
@@ -162,6 +162,7 @@ Guidelines:
 - Keep surrounding context intact
 - Ensure the answer is uniquely determined by the context
 - Create 1-2 cloze cards per concept
+- CRITICAL: The "question" field must NOT contain the answer or cloze syntax. It should be the sentence with a blank (e.g. "_____") replacing the hidden term.
 
 Concepts:
 {{ concepts }}
@@ -172,7 +173,7 @@ Return your response as a JSON array:
     "card_type": "cloze",
     "cloze_text": "A sentence with the key term replaced like this: {% raw %}{{c1::the answer}}{% endraw %}",
     "answer": "The clozed term",
-    "question": "What term completes this: A sentence with [...] replaced?",
+    "question": "A sentence with the key term replaced like this: _____",
     "hints": ["First letter hint"],
     "difficulty": "medium",
     "source_concept": "Concept name"
@@ -228,6 +229,37 @@ Return your response as a JSON array:
 Be constructive but rigorous. Flag cards that don't meet professional educational standards."""
 
 
+REVISE_FLASHCARDS_PROMPT = """You are an expert flashcard editor. You have been given flashcards that were flagged during quality review along with specific suggestions for improvement.
+
+Your task is to revise each flagged card to fix the identified issues while preserving the core concept being tested.
+
+## Rules:
+- Fix ONLY the issues mentioned in the suggestions
+- Keep the same concept/topic for each card
+- Ensure the question does NOT contain the answer
+- For cloze cards, use "_____" in the question (NOT {{c1::...}} syntax)
+- Keep answers concise (2-4 sentences max)
+- Ensure each card tests exactly one concept
+
+Flagged cards with suggestions:
+{{ flagged_cards }}
+
+Return your response as a JSON array with the revised cards:
+[
+  {
+    "original_question": "The original question text (so we can match it)",
+    "card_type": "basic",
+    "question": "Revised question",
+    "answer": "Revised answer",
+    "hints": ["hint1", "hint2"],
+    "explanation": "Why this answer is correct",
+    "difficulty": "easy",
+    "tags": ["tag1"]
+  },
+  ...
+]"""
+
+
 # ---------------------------------------------------------------------------
 # Graph Nodes
 # ---------------------------------------------------------------------------
@@ -252,6 +284,25 @@ def _run_async_in_sync(coro_fn):
             return future.result()
     except RuntimeError:
         return run()
+
+
+def _process_cloze_question(question: str, answer: str) -> tuple[str, str]:
+    """Strip {{c1::...}} syntax from cloze questions.
+
+    Returns (clean_question, extracted_answer) where the cloze deletion
+    is replaced with a blank placeholder and the answer is extracted.
+    """
+    cloze_pattern = re.compile(r"\{\{c\d+::(.*?)\}\}")
+    match = cloze_pattern.search(question)
+    if match:
+        # Extract the answer from the cloze syntax if not already set
+        extracted = match.group(1).strip()
+        if not answer:
+            answer = extracted
+        # Replace the cloze syntax with a blank
+        clean_question = cloze_pattern.sub("_____", question)
+        return clean_question, answer
+    return question, answer
 
 
 def _parse_json_response(text: str, expected_type: str = "list") -> Any:
@@ -442,11 +493,17 @@ def generate_flashcards_node(state: FlashcardGraphState) -> dict:
             ):
                 continue
 
+            question = str(fc.get("question", ""))[:500]
+            answer = str(fc.get("answer", ""))[:1000]
+
+            # Strip cloze syntax from question so the answer isn't leaked
+            question, answer = _process_cloze_question(question, answer)
+
             normalized.append(
                 {
                     "card_type": fc.get("card_type", "basic"),
-                    "question": str(fc.get("question", ""))[:500],
-                    "answer": str(fc.get("answer", ""))[:1000],
+                    "question": question,
+                    "answer": answer,
                     "hints": list(fc.get("hints", []))[:3],
                     "explanation": fc.get("explanation", ""),
                     "difficulty": fc.get("difficulty", "medium"),
@@ -519,12 +576,26 @@ def _generate_cloze_cards(concepts: List[Dict], num_cloze: int) -> List[Dict]:
         for card in cloze_cards:
             if not card.get("cloze_text"):
                 continue
+
+            question = card.get("question", "Complete this statement")
+            answer = card.get("answer", "")
+
+            # Strip cloze syntax from question so the answer isn't leaked
+            question, answer = _process_cloze_question(question, answer)
+            # Also process the cloze_text to derive a clean question if needed
+            cloze_text = card.get("cloze_text", "")
+            if "{{c" in question or question == "Complete this statement":
+                # Generate a clean question from cloze_text
+                clean_q, _ = _process_cloze_question(cloze_text, "")
+                if clean_q != cloze_text:
+                    question = clean_q
+
             normalized.append(
                 {
                     "card_type": "cloze",
-                    "question": card.get("question", "Complete this statement"),
-                    "answer": card.get("answer", ""),
-                    "cloze_text": card.get("cloze_text", ""),
+                    "question": question,
+                    "answer": answer,
+                    "cloze_text": cloze_text,
                     "hints": card.get("hints", []),
                     "difficulty": card.get("difficulty", "medium"),
                     "tags": [],
@@ -537,6 +608,96 @@ def _generate_cloze_cards(concepts: List[Dict], num_cloze: int) -> List[Dict]:
     except Exception as e:
         logger.error(f"[flashcard_graph] Cloze generation failed: {e}")
         return []
+
+
+def _revise_flagged_cards(cards_with_suggestions: List[Dict]) -> List[Dict]:
+    """Send flagged cards to the AI for revision. Returns revised cards,
+    falling back to the originals if revision fails."""
+    if not cards_with_suggestions:
+        return []
+
+    # Format flagged cards with their suggestions for the prompt
+    flagged_text = "\n\n".join(
+        f"**Card {i + 1}**\n"
+        f"Type: {c.get('card_type', 'basic')}\n"
+        f"Question: {c.get('question', '')}\n"
+        f"Answer: {c.get('answer', '')}\n"
+        f"Hints: {c.get('hints', [])}\n"
+        f"Difficulty: {c.get('difficulty', 'medium')}\n"
+        f"Issues to fix: {c.get('_suggestions', [])}"
+        for i, c in enumerate(cards_with_suggestions)
+    )
+
+    prompt = Prompter(
+        prompt_template="flashcard/revise_cards",
+        default_content=REVISE_FLASHCARDS_PROMPT,
+    ).render(data={"flagged_cards": flagged_text})
+
+    def run_revision():
+        async def _run():
+            model = await provision_langchain_model(
+                prompt[:1000], None, "chat", max_tokens=8192
+            )
+            response = model.invoke(
+                [
+                    SystemMessage(
+                        content="You are a flashcard editor. Return only valid JSON."
+                    ),
+                    HumanMessage(content=prompt),
+                ]
+            )
+            return getattr(response, "content", str(response))
+
+        return _run()
+
+    try:
+        result_text = _run_async_in_sync(run_revision)
+        revised_cards = _parse_json_response(result_text)
+
+        if not revised_cards or not isinstance(revised_cards, list):
+            logger.warning("[flashcard_graph] Revision returned invalid format, keeping originals")
+            return [{k: v for k, v in c.items() if k != "_suggestions"} for c in cards_with_suggestions]
+
+        # Build lookup from original question -> revised card
+        revised_lookup: Dict[str, Dict] = {}
+        for rc in revised_cards:
+            orig_q = rc.get("original_question", "")
+            if orig_q:
+                revised_lookup[orig_q] = rc
+
+        # Match revised cards to originals; fall back to original if no match
+        result = []
+        for orig in cards_with_suggestions:
+            orig_q = orig.get("question", "")
+            revised = revised_lookup.get(orig_q)
+            if revised and revised.get("question") and revised.get("answer"):
+                # Use revised version, strip cloze syntax
+                question, answer = _process_cloze_question(
+                    str(revised.get("question", ""))[:500],
+                    str(revised.get("answer", ""))[:1000],
+                )
+                result.append({
+                    "card_type": revised.get("card_type", orig.get("card_type", "basic")),
+                    "question": question,
+                    "answer": answer,
+                    "hints": list(revised.get("hints", orig.get("hints", [])))[:3],
+                    "explanation": revised.get("explanation", orig.get("explanation", "")),
+                    "difficulty": revised.get("difficulty", orig.get("difficulty", "medium")),
+                    "tags": list(revised.get("tags", orig.get("tags", [])))[:5],
+                    "source_concept": orig.get("source_concept", ""),
+                    "cloze_text": revised.get("cloze_text", orig.get("cloze_text")),
+                })
+                logger.info(f"[flashcard_graph] Revised card: {orig_q[:60]}...")
+            else:
+                # Keep original (without internal _suggestions key)
+                result.append({k: v for k, v in orig.items() if k != "_suggestions"})
+                logger.info(f"[flashcard_graph] Kept original (no revision match): {orig_q[:60]}...")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[flashcard_graph] Card revision failed: {e}")
+        return [{k: v for k, v in c.items() if k != "_suggestions"} for c in cards_with_suggestions]
 
 
 def quality_check_node(state: FlashcardGraphState) -> dict:
@@ -585,26 +746,44 @@ def quality_check_node(state: FlashcardGraphState) -> dict:
         reviews = _parse_json_response(result_text)
 
         if not reviews or not isinstance(reviews, list):
-            logger.warning(f"[flashcard_graph] Quality check returned invalid format")
+            logger.warning("[flashcard_graph] Quality check returned invalid format")
             return {"flashcards": flashcards, "errors": state.get("errors", [])}
 
-        # Build set of cards needing revision
-        revision_questions = set()
+        # Collect flagged cards with their suggestions
+        flagged: Dict[str, List[str]] = {}  # question -> suggestions
         for r in reviews:
-            if r.get("status") == "REVISION":
-                revision_questions.add(r.get("question", ""))
+            if r.get("status") == "REVISION" and r.get("question"):
+                flagged[r["question"]] = r.get("suggestions", [])
 
-        # Filter out problematic cards
-        filtered = [
-            f for f in flashcards if f.get("question") not in revision_questions
-        ]
+        if not flagged:
+            logger.info("[flashcard_graph] Quality check: all cards passed")
+            return {"flashcards": flashcards, "errors": state.get("errors", [])}
 
-        if len(revision_questions) > 0:
-            logger.info(
-                f"[flashcard_graph] Quality check removed {len(revision_questions)} cards"
-            )
+        logger.info(
+            f"[flashcard_graph] Quality check flagged {len(flagged)}/{len(flashcards)} cards, attempting revision"
+        )
 
-        return {"flashcards": filtered, "errors": state.get("errors", [])}
+        # Split into passed and flagged
+        passed_cards = []
+        cards_to_fix = []
+        for f in flashcards:
+            q = f.get("question", "")
+            if q in flagged:
+                cards_to_fix.append({**f, "_suggestions": flagged[q]})
+            else:
+                passed_cards.append(f)
+
+        # Attempt to revise flagged cards
+        revised = _revise_flagged_cards(cards_to_fix)
+
+        # Merge: passed cards + revised cards (fall back to original if revision fails)
+        final_cards = passed_cards + revised
+        logger.info(
+            f"[flashcard_graph] Quality check result: {len(passed_cards)} passed, "
+            f"{len(revised)} revised, {len(final_cards)} total"
+        )
+
+        return {"flashcards": final_cards, "errors": state.get("errors", [])}
 
     except Exception as e:
         logger.error(f"[flashcard_graph] Quality check failed: {e}")

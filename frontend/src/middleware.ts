@@ -3,13 +3,23 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const shouldLogProxyDebug = process.env.OPEN_NOTEBOOK_PROXY_DEBUG === 'true'
 
-  // When API password auth is enabled, also gate the UI site-wide.
-  // This prevents anonymous users from loading pages and spamming actions.
-  const authEnabled = Boolean(process.env.OPEN_NOTEBOOK_PASSWORD || process.env.FRONTEND_AUTH_ENABLED)
+  if (shouldLogProxyDebug && (pathname.startsWith('/api') || pathname === '/config')) {
+    console.log(
+      `[FRONTEND REQUEST] ${request.method} ${pathname}${request.nextUrl.search} host=${request.headers.get('host') || 'unknown'} origin=${request.headers.get('origin') || 'unknown'} referer=${request.headers.get('referer') || 'unknown'}`,
+    )
+  }
 
-  // Always allow auth/config endpoints and static assets.
+  // Default to frontend auth being enabled so it matches backend admin/admin fallback.
+  // An explicitly empty OPEN_NOTEBOOK_PASSWORD keeps the old "auth disabled" behavior.
+  const authEnabled =
+    process.env.FRONTEND_AUTH_ENABLED !== 'false' &&
+    process.env.OPEN_NOTEBOOK_PASSWORD !== ''
+
+  // Always allow auth/config and API endpoints.
   if (
+    pathname.startsWith('/api') ||
     pathname.startsWith('/site-auth') ||
     pathname === '/login' ||
     pathname === '/config'
@@ -37,6 +47,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|site-auth|config|_next/static|_next/image|favicon.ico).*)',
+    '/((?!site-auth|_next/static|_next/image|favicon.ico).*)',
   ],
 }

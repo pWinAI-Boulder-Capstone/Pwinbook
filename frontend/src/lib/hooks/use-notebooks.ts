@@ -6,7 +6,8 @@ import {
   CreateNotebookRequest,
   UpdateNotebookRequest,
   NotebookQuickSummaryRequest,
-  NotebookQuickSummaryResponse
+  NotebookQuickSummaryResponse,
+  NotebookQuickSummaryImageRequest
 } from '@/lib/types/api'
 
 export function useNotebooks(archived?: boolean) {
@@ -113,6 +114,29 @@ export function useQuickSummary() {
       toast({
         title: 'Error',
         description: 'Failed to generate quick summary',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+export function useQuickSummaryImage() {
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: NotebookQuickSummaryImageRequest }) =>
+      notebooksApi.quickSummaryImage(id, data),
+    onSuccess: () => {
+      toast({
+        title: 'Summary image ready',
+        description: 'Image generated from the quick summary.',
+      })
+    },
+    onError: (error: unknown) => {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast({
+        title: 'Error',
+        description: detail || 'Failed to generate summary image',
         variant: 'destructive',
       })
     },

@@ -6,21 +6,32 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+DEFAULT_AUTH_PASSWORD = "pwin@adarsh"
+
+
+def get_expected_password() -> str:
+    return os.environ.get("OPEN_NOTEBOOK_PASSWORD", DEFAULT_AUTH_PASSWORD)
+
+
+def is_password_auth_enabled() -> bool:
+    configured_password = os.environ.get("OPEN_NOTEBOOK_PASSWORD")
+    return configured_password != ""
+
 
 class PasswordAuthMiddleware(BaseHTTPMiddleware):
     """
     Middleware to check password authentication for all API requests.
-    Only active when OPEN_NOTEBOOK_PASSWORD environment variable is set.
+    Defaults to password authentication with pwinbook/pwin@adarsh.
+    Setting OPEN_NOTEBOOK_PASSWORD="" disables authentication.
     """
     
     def __init__(self, app, excluded_paths: Optional[list] = None):
         super().__init__(app)
-        self.password = os.environ.get("OPEN_NOTEBOOK_PASSWORD")
         self.excluded_paths = excluded_paths or ["/", "/health", "/docs", "/openapi.json", "/redoc"]
     
     async def dispatch(self, request: Request, call_next):
-        # Skip authentication if no password is set
-        if not self.password:
+        # Skip authentication only when explicitly disabled.
+        if not is_password_auth_enabled():
             return await call_next(request)
         
         # Skip authentication for excluded paths
@@ -54,7 +65,7 @@ class PasswordAuthMiddleware(BaseHTTPMiddleware):
             )
         
         # Check password
-        if credentials != self.password:
+        if credentials != get_expected_password():
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid password"},
@@ -75,10 +86,7 @@ def check_api_password(credentials: Optional[HTTPAuthorizationCredentials] = Non
     Utility function to check API password.
     Can be used as a dependency in individual routes if needed.
     """
-    password = os.environ.get("OPEN_NOTEBOOK_PASSWORD")
-    
-    # No password set, allow access
-    if not password:
+    if not is_password_auth_enabled():
         return True
     
     # No credentials provided
@@ -90,7 +98,7 @@ def check_api_password(credentials: Optional[HTTPAuthorizationCredentials] = Non
         )
     
     # Check password
-    if credentials.credentials != password:
+    if credentials.credentials != get_expected_password():
         raise HTTPException(
             status_code=401,
             detail="Invalid password",
