@@ -29,14 +29,38 @@ export async function resolvePodcastAssetUrl(path?: string | null): Promise<stri
   return `${base}/${path}`
 }
 
+function encEpisodeId(episodeId: string) {
+  return encodeURIComponent(episodeId)
+}
+
 export const podcastsApi = {
   listEpisodes: async () => {
     const response = await apiClient.get<PodcastEpisode[]>('/podcasts/episodes')
     return response.data
   },
 
+  getEpisode: async (episodeId: string) => {
+    const response = await apiClient.get<PodcastEpisode>(
+      `/podcasts/episodes/${encEpisodeId(episodeId)}`
+    )
+    return response.data
+  },
+
+  generateEpisodeCover: async (episodeId: string, force = false) => {
+    const response = await apiClient.post<{
+      image_data_url?: string | null
+      error?: string | null
+      cached?: boolean
+    }>(
+      `/podcasts/episodes/${encEpisodeId(episodeId)}/cover-image`,
+      undefined,
+      { params: { force } }
+    )
+    return response.data
+  },
+
   deleteEpisode: async (episodeId: string) => {
-    await apiClient.delete(`/podcasts/episodes/${episodeId}`)
+    await apiClient.delete(`/podcasts/episodes/${encEpisodeId(episodeId)}`)
   },
 
   listEpisodeProfiles: async () => {
@@ -110,4 +134,10 @@ export const podcastsApi = {
     )
     return response.data
   },
+}
+
+export type PodcastCoverResponse = {
+  image_data_url?: string | null
+  error?: string | null
+  cached?: boolean
 }

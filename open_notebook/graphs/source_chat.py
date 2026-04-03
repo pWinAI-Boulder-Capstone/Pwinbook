@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import json
 import sqlite3
 from typing import Annotated, Dict, List, Optional
 
@@ -16,7 +17,9 @@ from open_notebook.config import LANGGRAPH_CHECKPOINT_FILE
 from open_notebook.domain.notebook import Source, SourceInsight
 from open_notebook.graphs.utils import provision_langchain_model
 from open_notebook.utils.context_builder import ContextBuilder
-from open_notebook.utils.openrouter_image import edit_image, generate_image
+from open_notebook.utils.openrouter_api import edit_image, generate_image, generate_images
+
+IMAGE_GALLERY_PREFIX = "__IMAGE_GALLERY__:"
 
 
 # System prompt for classifying user intent (text vs image vs image edit)
@@ -60,6 +63,8 @@ class SourceChatState(TypedDict):
     context_indicators: Optional[Dict[str, List[str]]]
     intent: Optional[str]
     last_image_prompt: Optional[str]  
+    max_images: Optional[int]
+    last_image_data_url: Optional[str]
 
 
 def _run_async_in_sync(coro_fn):
@@ -239,25 +244,46 @@ def call_source_image_agent(state: SourceChatState, config: RunnableConfig) -> d
     # Generate image via OpenRouter
     def do_generate():
         async def _run():
-            return await generate_image(refined_prompt)
+            max_images = state.get("max_images") or 1
+            return await generate_images(refined_prompt, max_images=max_images)
 
         return _run()
 
     result = _run_async_in_sync(do_generate)
-    # result is either a data URL or an error string
-    if result.startswith("data:image/"):
-        logger.info(f"[Image flow] Step 4 – Image generated successfully (data URL length {len(result)})")
+    # result is either list[data_url] or an error string
+    if isinstance(result, list) and result:
+        if len(result) == 1:
+            single = result[0]
+            logger.info(f"[Image flow] Step 4 – Image generated successfully (data URL length {len(single)})")
+            return {
+                "messages": AIMessage(content=single),
+                "source": source,
+                "insights": insights,
+                "context": formatted_context,
+                "context_indicators": context_indicators,
+                "last_image_prompt": refined_prompt,
+                "last_image_data_url": single,
+            }
+        payload = {
+            "type": "image_gallery",
+            "images": result,
+            "selected_index": 0,
+        }
+        logger.info(f"[Image flow] Step 4 – Generated image gallery with {len(result)} images")
         return {
-            "messages": AIMessage(content=result),
+            "messages": AIMessage(content=f"{IMAGE_GALLERY_PREFIX}{json.dumps(payload)}"),
             "source": source,
             "insights": insights,
             "context": formatted_context,
             "context_indicators": context_indicators,
             "last_image_prompt": refined_prompt,
+            "last_image_data_url": result[0],
         }
-    else:
+    elif isinstance(result, str):
         logger.warning(f"[Image flow] Step 4 – Image generation returned error: {result[:200]!r}")
-    ai_message = AIMessage(content=result)
+        ai_message = AIMessage(content=result)
+    else:
+        ai_message = AIMessage(content="Image generation failed unexpectedly.")
     return {
         "messages": ai_message,
         "source": source,
@@ -292,7 +318,7 @@ def call_source_image_edit_agent(state: SourceChatState, config: RunnableConfig)
     if not (user_content and user_content.strip()):
         return {"messages": AIMessage(content="What would you like to change in the previous image?")}
 
-    last_image_url = _get_last_image_data_url(messages)
+    last_image_url = state.get("last_image_data_url") or _get_last_image_data_url(messages)
     pixel_edit_error: Optional[str] = None
 
     if last_image_url:
@@ -304,7 +330,7 @@ def call_source_image_edit_agent(state: SourceChatState, config: RunnableConfig)
         result = _run_async_in_sync(do_edit)
         if result.startswith("data:image/"):
             logger.info(f"[Image edit] Pixel edit succeeded, data URL length {len(result)}")
-            return {"messages": AIMessage(content=result)}
+            return {"messages": AIMessage(content=result), "last_image_data_url": result}
         pixel_edit_error = result
 
     last_prompt = state.get("last_image_prompt") or ""
@@ -350,7 +376,11 @@ def call_source_image_edit_agent(state: SourceChatState, config: RunnableConfig)
     result = _run_async_in_sync(do_generate)
     if result.startswith("data:image/"):
         logger.info(f"[Image edit] Image generated, data URL length {len(result)}")
-        return {"messages": AIMessage(content=result), "last_image_prompt": new_prompt}
+        return {
+            "messages": AIMessage(content=result),
+            "last_image_prompt": new_prompt,
+            "last_image_data_url": result,
+        }
     logger.warning(f"[Image edit] Generation returned: {result[:150]!r}")
     return {"messages": AIMessage(content=result)}
 

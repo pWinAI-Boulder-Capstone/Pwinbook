@@ -67,6 +67,9 @@ class ExecuteChatRequest(BaseModel):
     model_override: Optional[str] = Field(
         None, description="Optional model override for this message"
     )
+    max_images: int = Field(
+        1, ge=1, le=5, description="Maximum number of images to generate for image requests"
+    )
 
 
 class ExecuteChatResponse(BaseModel):
@@ -344,6 +347,7 @@ async def execute_chat(request: ExecuteChatRequest):
         state_values["messages"] = state_values.get("messages", [])
         state_values["context"] = request.context
         state_values["model_override"] = model_override
+        state_values["max_images"] = request.max_images
 
         # Add user message to state
         from langchain_core.messages import HumanMessage
@@ -380,6 +384,10 @@ async def execute_chat(request: ExecuteChatRequest):
         return ExecuteChatResponse(session_id=request.session_id, messages=messages)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Session not found")
+    except ValueError as e:
+        if "No chat model configured" in str(e) or "not a LanguageModel" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Error executing chat: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error executing chat: {str(e)}")

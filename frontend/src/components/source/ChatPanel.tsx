@@ -6,8 +6,38 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Bot, User, Send, Loader2, FileText, Lightbulb, StickyNote, Clock } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Label } from '@/components/ui/label'
+import {
+  Bot,
+  User,
+  Send,
+  Loader2,
+  FileText,
+  Lightbulb,
+  StickyNote,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Cpu,
+  Images,
+} from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import {
   SourceChatMessage,
@@ -21,6 +51,15 @@ import { MessageActions } from '@/components/source/MessageActions'
 import { convertReferencesToCompactMarkdown, createCompactReferenceLinkComponent } from '@/lib/utils/source-references'
 import { useModalManager } from '@/lib/hooks/use-modal-manager'
 import { toast } from 'sonner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+const IMAGE_GALLERY_PREFIX = '__IMAGE_GALLERY__:'
 
 interface NotebookContextStats {
   sourcesInsights: number
@@ -34,7 +73,7 @@ interface ChatPanelProps {
   messages: SourceChatMessage[]
   isStreaming: boolean
   contextIndicators: SourceChatContextIndicator | null
-  onSendMessage: (message: string, modelOverride?: string) => void
+  onSendMessage: (message: string, modelOverride?: string, maxImages?: number) => void
   modelOverride?: string
   onModelChange?: (model?: string) => void
   // Session management props
@@ -74,6 +113,10 @@ export function ChatPanel({
   notebookId
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
+  const [maxImages, setMaxImages] = useState('1')
+  const [modelDialogOpen, setModelDialogOpen] = useState(false)
+  const [maxImagesDialogOpen, setMaxImagesDialogOpen] = useState(false)
+  const [selectedImageIndices, setSelectedImageIndices] = useState<Record<string, number>>({})
   const [sessionManagerOpen, setSessionManagerOpen] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -100,7 +143,8 @@ export function ChatPanel({
 
   const handleSend = () => {
     if (input.trim() && !isStreaming) {
-      onSendMessage(input.trim(), modelOverride)
+      const parsedMaxImages = Number.parseInt(maxImages, 10)
+      onSendMessage(input.trim(), modelOverride, Number.isNaN(parsedMaxImages) ? 1 : parsedMaxImages)
       setInput('')
     }
   }
@@ -196,8 +240,13 @@ export function ChatPanel({
                     >
                       {message.type === 'ai' ? (
                         <AIMessageContent
+                          messageId={message.id}
                           content={message.content}
                           onReferenceClick={handleReferenceClick}
+                          selectedImageIndex={selectedImageIndices[message.id] ?? 0}
+                          onSelectedImageIndexChange={(index) =>
+                            setSelectedImageIndices((prev) => ({ ...prev, [message.id]: index }))
+                          }
                         />
                       ) : (
                         <p className="text-sm break-words overflow-wrap-anywhere">{message.content}</p>
@@ -207,6 +256,7 @@ export function ChatPanel({
                       <MessageActions
                         content={message.content}
                         notebookId={notebookId}
+                        selectedImageIndex={selectedImageIndices[message.id] ?? 0}
                       />
                     )}
                   </div>
@@ -273,21 +323,105 @@ export function ChatPanel({
           />
         )}
 
-        {/* Input Area */}
+        {/* Input Area: + menu (model / max images) + composer */}
         <div className="flex-shrink-0 p-4 space-y-3 border-t">
-          {/* Model selector */}
-          {onModelChange && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Model</span>
-              <ModelSelector
-                currentModel={modelOverride}
-                onModelChange={onModelChange}
-                disabled={isStreaming}
-              />
-            </div>
-          )}
+          {onModelChange ? (
+            <ModelSelector
+              currentModel={modelOverride}
+              onModelChange={onModelChange}
+              disabled={isStreaming}
+              open={modelDialogOpen}
+              onOpenChange={setModelDialogOpen}
+              showTrigger={false}
+            />
+          ) : null}
+
+          <Dialog open={maxImagesDialogOpen} onOpenChange={setMaxImagesDialogOpen}>
+            <DialogContent className="sm:max-w-[400px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Images className="h-5 w-5" />
+                  Max images per request
+                </DialogTitle>
+                <DialogDescription>
+                  When you ask for a generated image, the app can return up to this many variants at once (1–5).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2 py-2">
+                <Label htmlFor="chat-max-images">Number of images</Label>
+                <Select
+                  value={maxImages}
+                  onValueChange={setMaxImages}
+                  disabled={isStreaming}
+                >
+                  <SelectTrigger id="chat-max-images" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="4">4</SelectItem>
+                    <SelectItem value="5">5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setMaxImagesDialogOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <div className="flex gap-2 items-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-[40px] w-[40px] shrink-0"
+                  disabled={isStreaming}
+                  aria-label="Chat options"
+                >
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {onModelChange ? (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      window.setTimeout(() => setModelDialogOpen(true), 0)
+                    }}
+                  >
+                    <Cpu className="mr-2 h-4 w-4" />
+                    <div className="flex flex-col gap-0.5">
+                      <span>Model</span>
+                      <span className="text-xs font-normal text-muted-foreground">
+                        Override the chat model for this session
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                  onSelect={() => {
+                    window.setTimeout(() => setMaxImagesDialogOpen(true), 0)
+                  }}
+                >
+                  <Images className="mr-2 h-4 w-4" />
+                  <div className="flex flex-col gap-0.5">
+                    <span>Max images</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Currently {maxImages} per image request
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -320,12 +454,38 @@ export function ChatPanel({
 
 // Helper component to render AI messages with clickable references or generated images
 function AIMessageContent({
+  messageId,
   content,
-  onReferenceClick
+  onReferenceClick,
+  selectedImageIndex,
+  onSelectedImageIndexChange,
 }: {
+  messageId: string
   content: string
   onReferenceClick: (type: string, id: string) => void
+  selectedImageIndex?: number
+  onSelectedImageIndexChange?: (index: number) => void
 }) {
+  if (content.startsWith(IMAGE_GALLERY_PREFIX)) {
+    const payloadText = content.slice(IMAGE_GALLERY_PREFIX.length)
+    try {
+      const payload = JSON.parse(payloadText)
+      const images = Array.isArray(payload?.images) ? payload.images : []
+      if (images.length > 0) {
+        return (
+          <ImageCarousel
+            key={messageId}
+            images={images}
+            selectedIndex={selectedImageIndex ?? 0}
+            onSelectedIndexChange={onSelectedImageIndexChange}
+          />
+        )
+      }
+    } catch {
+      // Fall through and render as regular markdown message.
+    }
+  }
+
   // Generated image (data URL from image generation in Chat with source)
   if (content.startsWith('data:image/')) {
     return (
@@ -364,6 +524,56 @@ function AIMessageContent({
       >
         {markdownWithCompactRefs}
       </ReactMarkdown>
+    </div>
+  )
+}
+
+function ImageCarousel({
+  images,
+  selectedIndex,
+  onSelectedIndexChange,
+}: {
+  images: string[]
+  selectedIndex: number
+  onSelectedIndexChange?: (index: number) => void
+}) {
+  const safeIndex = Math.min(Math.max(selectedIndex, 0), images.length - 1)
+  const current = images[safeIndex]
+  const canGoLeft = safeIndex > 0
+  const canGoRight = safeIndex < images.length - 1
+
+  return (
+    <div className="rounded overflow-hidden max-w-full">
+      <div className="flex items-center justify-between mb-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onSelectedIndexChange?.(Math.max(safeIndex - 1, 0))}
+          disabled={!canGoLeft}
+          className="h-7 w-7"
+          aria-label="Previous image"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Image {safeIndex + 1} of {images.length}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onSelectedIndexChange?.(Math.min(safeIndex + 1, images.length - 1))}
+          disabled={!canGoRight}
+          className="h-7 w-7"
+          aria-label="Next image"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+      <img
+        src={current}
+        alt={`Generated ${safeIndex + 1}`}
+        className="max-h-[320px] w-auto object-contain rounded"
+      />
     </div>
   )
 }

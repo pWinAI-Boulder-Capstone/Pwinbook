@@ -28,5 +28,11 @@ async def provision_langchain_model(
         model = await model_manager.get_default_model(default_type, **kwargs)
 
     logger.debug(f"Using model: {model}")
-    assert isinstance(model, LanguageModel), f"Model is not a LanguageModel: {model}"
+    if model is None:
+        raise ValueError(
+            "No chat model configured. Set a default in Models → Default Model Assignments → Chat Model, "
+            "or choose a model for this chat session."
+        )
+    if not isinstance(model, LanguageModel):
+        raise ValueError(f"Model is not a LanguageModel: {model}")
     return model.to_langchain()

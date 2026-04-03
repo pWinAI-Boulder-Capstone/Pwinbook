@@ -178,6 +178,7 @@ export interface UpdateSourceChatSessionRequest {
 export interface SendMessageRequest {
   message: string
   model_override?: string
+  max_images?: number
 }
 
 export interface SourceChatStreamEvent {
@@ -223,6 +224,7 @@ export interface SendNotebookChatMessageRequest {
     notes: Array<Record<string, unknown>>
   }
   model_override?: string
+  max_images?: number
 }
 
 export interface BuildContextRequest {

@@ -78,6 +78,16 @@ export function usePodcastEpisodes(options?: { autoRefresh?: boolean }) {
   }
 }
 
+export function usePodcastEpisode(episodeId: string | undefined) {
+  return useQuery({
+    queryKey: episodeId
+      ? QUERY_KEYS.podcastEpisode(episodeId)
+      : ['podcasts', 'episodes', '__no_id__'],
+    queryFn: () => podcastsApi.getEpisode(episodeId!),
+    enabled: Boolean(episodeId),
+  })
+}
+
 export function useDeletePodcastEpisode() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
