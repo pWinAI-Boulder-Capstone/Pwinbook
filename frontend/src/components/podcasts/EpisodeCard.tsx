@@ -1,11 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { InfoIcon, Trash2 } from 'lucide-react'
 
-import { resolvePodcastAssetUrl } from '@/lib/api/podcasts'
 import { EpisodeStatus, PodcastEpisode } from '@/lib/types/podcasts'
+import { usePodcastEpisodeAudio } from '@/lib/hooks/usePodcastEpisodeAudio'
+import {
+  extractOutlineSegments,
+  extractTranscriptEntries,
+  getTranscriptMeta,
+  type OutlineSegment,
+} from '@/lib/utils/podcast-episode'
 import { cn } from '@/lib/utils'
 import {
   AlertDialog,
@@ -93,136 +100,18 @@ function StatusBadge({ status }: { status?: EpisodeStatus | null }) {
   )
 }
 
-type OutlineSegment = {
-  name?: string
-  description?: string
-  size?: string
-}
-
-type OutlineData = {
-  segments?: OutlineSegment[]
-}
-
-type TranscriptEntry = {
-  speaker?: string
-  dialogue?: string
-  text?: string
-  citation?: string
-  pacing_cue?: string
-  pronunciation_notes?: string
-}
-
-type TranscriptData = {
-  transcript?: TranscriptEntry[]
-  audio_error?: string
-  audio_skipped?: string
-  duration_info?: {
-    valid?: boolean
-    duration_minutes?: number
-    target_range_minutes?: [number, number]
-    warning?: string
-  }
-}
-
-function extractOutlineSegments(outline: unknown): OutlineSegment[] {
-  if (outline && typeof outline === 'object' && 'segments' in outline) {
-    const data = outline as OutlineData
-    if (Array.isArray(data.segments)) {
-      return data.segments
-    }
-  }
-  return []
-}
-
-function extractTranscriptEntries(transcript: unknown): TranscriptEntry[] {
-  if (transcript && typeof transcript === 'object') {
-    // Support both 'transcript' (new format) and 'dialogue' (legacy format) keys
-    const data = transcript as Record<string, unknown>
-    const entries = data.transcript ?? data.dialogue
-    if (Array.isArray(entries)) {
-      return entries as TranscriptEntry[]
-    }
-  }
-  return []
-}
-
 export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
-  const [audioSrc, setAudioSrc] = useState<string | undefined>()
-  const [audioError, setAudioError] = useState<string | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const outlineSegments = useMemo(() => extractOutlineSegments(episode.outline), [episode.outline])
   const transcriptEntries = useMemo(() => extractTranscriptEntries(episode.transcript), [episode.transcript])
 
-  // Extract audio metadata from transcript object
-  const transcriptMeta = useMemo(() => {
-    if (episode.transcript && typeof episode.transcript === 'object') {
-      const data = episode.transcript as TranscriptData
-      return {
-        audioError: data.audio_error,
-        audioSkipped: data.audio_skipped,
-        durationInfo: data.duration_info,
-      }
-    }
-    return {}
-  }, [episode.transcript])
+  const transcriptMeta = useMemo(
+    () => getTranscriptMeta(episode.transcript),
+    [episode.transcript]
+  )
 
-  useEffect(() => {
-    let revokeUrl: string | undefined
-    setAudioError(null)
-
-    // If backend exposed a protected endpoint, fetch it with auth headers
-    const loadProtectedAudio = async () => {
-      // First resolve the audio URL
-      const directAudioUrl = await resolvePodcastAssetUrl(episode.audio_url ?? episode.audio_file)
-
-      if (!directAudioUrl || !episode.audio_url) {
-        setAudioSrc(directAudioUrl)
-        return
-      }
-
-      try {
-        let token: string | undefined
-        if (typeof window !== 'undefined') {
-          const raw = window.localStorage.getItem('auth-storage')
-          if (raw) {
-            try {
-              const parsed = JSON.parse(raw)
-              token = parsed?.state?.token
-            } catch (error) {
-              console.error('Failed to parse auth storage', error)
-            }
-          }
-        }
-
-        const headers: HeadersInit = {}
-        if (token) {
-          headers.Authorization = `Bearer ${token}`
-        }
-
-        const response = await fetch(directAudioUrl, { headers })
-        if (!response.ok) {
-          throw new Error(`Audio request failed with status ${response.status}`)
-        }
-
-        const blob = await response.blob()
-        revokeUrl = URL.createObjectURL(blob)
-        setAudioSrc(revokeUrl)
-      } catch (error) {
-        console.error('Unable to load podcast audio', error)
-        setAudioError('Audio unavailable')
-        setAudioSrc(undefined)
-      }
-    }
-
-    void loadProtectedAudio()
-
-    return () => {
-      if (revokeUrl) {
-        URL.revokeObjectURL(revokeUrl)
-      }
-    }
-  }, [episode.audio_url, episode.audio_file])
+  const { audioSrc, audioError } = usePodcastEpisodeAudio(episode)
 
   const createdLabel = episode.created
     ? formatDistanceToNow(new Date(episode.created), {
@@ -240,9 +129,12 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-semibold text-foreground">
+              <Link
+                href={`/podcasts/${encodeURIComponent(episode.id)}`}
+                className="text-base font-semibold text-foreground hover:underline"
+              >
                 {episode.name}
-              </h3>
+              </Link>
               <StatusBadge status={episode.job_status} />
             </div>
             <p className="text-xs text-muted-foreground">
@@ -250,7 +142,7 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
               {createdLabel ? ` • Created ${createdLabel}` : ''}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">

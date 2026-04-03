@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Settings2, Sparkles } from 'lucide-react'
+import { Settings2 } from 'lucide-react'
 import { useModelDefaults, useModels } from '@/lib/hooks/use-models'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 
@@ -27,14 +27,32 @@ interface ModelSelectorProps {
   currentModel?: string
   onModelChange: (model?: string) => void
   disabled?: boolean
+  /** Controlled dialog open (use with `onOpenChange` and usually `showTrigger={false}`). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** When false, no trigger button — open via controlled `open` from a parent (e.g. + menu). */
+  showTrigger?: boolean
 }
 
-export function ModelSelector({ 
-  currentModel, 
+export function ModelSelector({
+  currentModel,
   onModelChange,
-  disabled = false 
+  disabled = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  showTrigger = true,
 }: ModelSelectorProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled =
+    controlledOpen !== undefined && controlledOnOpenChange !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      controlledOnOpenChange(next)
+    } else {
+      setInternalOpen(next)
+    }
+  }
   const [selectedModel, setSelectedModel] = useState(currentModel || 'default')
   const { data: models, isLoading } = useModels()
   const { data: defaults } = useModelDefaults()
@@ -81,25 +99,22 @@ export function ModelSelector({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
-          size="sm"
-          disabled={disabled}
-          className="gap-2"
-        >
-          <Settings2 className="h-4 w-4" />
-          <span className="text-xs">
-            {currentModelName}
-          </span>
-        </Button>
-      </DialogTrigger>
+      {showTrigger ? (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Settings2 className="h-4 w-4" />
+            <span className="text-xs">{currentModelName}</span>
+          </Button>
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            Model Configuration
-          </DialogTitle>
+          <DialogTitle>Model Configuration</DialogTitle>
           <DialogDescription>
             Override the default model for this chat session. Leave empty to use the system default.
           </DialogDescription>

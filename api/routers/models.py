@@ -288,13 +288,15 @@ async def get_provider_availability():
                     if model_type in esperanto_available and provider in esperanto_available[model_type]:
                         if _check_azure_support(mode):
                             supported_types[provider].append(model_type)
-            # OpenRouter: add image_generation (bypass Esperanto - OpenRouter supports it)
+            # OpenRouter: add image_generation and embedding (OpenRouter supports both; embedding via app adapter)
             elif provider == "openrouter" and os.environ.get("OPENROUTER_API_KEY"):
                 for model_type, providers in esperanto_available.items():
                     if provider in providers:
                         supported_types[provider].append(model_type)
                 if "image_generation" not in supported_types[provider]:
                     supported_types[provider].append("image_generation")
+                if "embedding" not in supported_types[provider]:
+                    supported_types[provider].append("embedding")
             else:
                 # Standard provider detection
                 for model_type, providers in esperanto_available.items():

@@ -26,6 +26,137 @@ export interface ContextSelections {
   notes: Record<string, ContextMode>
 }
 
+interface NotebookSourcesNotesBodyProps {
+  notebook: NotebookResponse
+  notebookId: string
+  sources: SourceListResponse[] | undefined
+  sourcesLoading: boolean
+  notes: NoteResponse[] | undefined
+  notesLoading: boolean
+  sourceCount: number
+  noteCount: number
+  contextSelections: ContextSelections
+  handleContextModeChange: (
+    itemId: string,
+    mode: ContextMode,
+    type: 'source' | 'note'
+  ) => void
+  refetchSources: () => void
+  autoOpenNoteId: string | null
+  setAutoOpenNoteId: (id: string | null) => void
+  chatOpen: boolean
+  setChatOpen: (open: boolean) => void
+}
+
+function NotebookSourcesNotesBody({
+  notebook,
+  notebookId,
+  sources,
+  sourcesLoading,
+  notes,
+  notesLoading,
+  sourceCount,
+  noteCount,
+  contextSelections,
+  handleContextModeChange,
+  refetchSources,
+  autoOpenNoteId,
+  setAutoOpenNoteId,
+  chatOpen,
+  setChatOpen,
+}: NotebookSourcesNotesBodyProps) {
+  return (
+    <>
+      <div className="flex-shrink-0 px-6 pt-5 pb-3">
+        <NotebookHeader
+          notebook={notebook}
+          onQuickSummaryCreated={(noteId) => setAutoOpenNoteId(noteId)}
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Tabs defaultValue="sources" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-shrink-0 items-center justify-between border-b px-6">
+            <TabsList className="h-10 gap-0 bg-transparent p-0">
+              <TabsTrigger
+                value="sources"
+                className="relative h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-2"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Sources
+                {sourceCount > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                    {sourceCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="notes"
+                className="relative h-10 rounded-none border-b-2 border-transparent px-4 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-2"
+              >
+                <StickyNote className="h-3.5 w-3.5" />
+                Notes
+                {noteCount > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                    {noteCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setChatOpen(!chatOpen)}
+              className="h-8 gap-2 text-muted-foreground"
+            >
+              {chatOpen ? (
+                <>
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                  <span className="hidden text-xs sm:inline">Hide Chat</span>
+                </>
+              ) : (
+                <>
+                  <PanelRightOpen className="h-3.5 w-3.5" />
+                  <span className="hidden text-xs sm:inline">Show Chat</span>
+                </>
+              )}
+            </Button>
+          </div>
+
+          <TabsContent value="sources" className="mt-0 flex-1 overflow-y-auto p-6">
+            <SourcesColumn
+              sources={sources}
+              isLoading={sourcesLoading}
+              notebookId={notebookId}
+              notebookName={notebook.name}
+              onRefresh={refetchSources}
+              contextSelections={contextSelections.sources}
+              onContextModeChange={(sourceId, mode) =>
+                handleContextModeChange(sourceId, mode, 'source')
+              }
+            />
+          </TabsContent>
+
+          <TabsContent value="notes" className="mt-0 flex-1 overflow-y-auto p-6">
+            <NotesColumn
+              notes={notes}
+              isLoading={notesLoading}
+              notebookId={notebookId}
+              contextSelections={contextSelections.notes}
+              onContextModeChange={(noteId, mode) =>
+                handleContextModeChange(noteId, mode, 'note')
+              }
+              autoOpenNoteId={autoOpenNoteId ?? undefined}
+              onAutoOpenHandled={() => setAutoOpenNoteId(null)}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
+  )
+}
+
 export default function NotebookPage() {
   const params = useParams()
   const notebookId = decodeURIComponent(params.id as string)
@@ -122,13 +253,24 @@ export default function NotebookPage() {
   return (
     <AppShell>
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left panel — Sources & Notes */}
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden border-r">
-          {/* Header */}
-          <div className="flex-shrink-0 px-6 pt-5 pb-3">
-            <NotebookHeader
+        {!chatOpen ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r">
+            <NotebookSourcesNotesBody
               notebook={notebook}
-              onQuickSummaryCreated={(noteId) => setAutoOpenNoteId(noteId)}
+              notebookId={notebookId}
+              sources={sources}
+              sourcesLoading={sourcesLoading}
+              notes={notes}
+              notesLoading={notesLoading}
+              sourceCount={sourceCount}
+              noteCount={noteCount}
+              contextSelections={contextSelections}
+              handleContextModeChange={handleContextModeChange}
+              refetchSources={refetchSources}
+              autoOpenNoteId={autoOpenNoteId}
+              setAutoOpenNoteId={setAutoOpenNoteId}
+              chatOpen={chatOpen}
+              setChatOpen={setChatOpen}
             />
           </div>
 
@@ -213,10 +355,7 @@ export default function NotebookPage() {
                   notes={regularNotes}
                   isLoading={notesLoading}
                   notebookId={notebookId}
-                  contextSelections={contextSelections.notes}
-                  onContextModeChange={(noteId, mode) => handleContextModeChange(noteId, mode, 'note')}
-                  autoOpenNoteId={autoOpenNoteId ?? undefined}
-                  onAutoOpenHandled={() => setAutoOpenNoteId(null)}
+                  contextSelections={contextSelections}
                 />
               </TabsContent>
 

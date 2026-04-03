@@ -22,7 +22,6 @@ In both chat experiences, the flow follows the same high-level pattern:
 
 ---
 
-
 ## Flow A: Chat with source -> Generate image
 
 
@@ -122,4 +121,4 @@ Code references:
 
 - Source chat: `call_source_image_edit_agent()` in `open_notebook/graphs/source_chat.py`
 - Notebook chat: `call_notebook_image_edit_agent()` in `open_notebook/graphs/chat.py`
-- OpenRouter edit utility: `edit_image()` in `open_notebook/utils/openrouter_image.py`
+- OpenRouter edit utility: `edit_image()` in `open_notebook/utils/openrouter_api.py`

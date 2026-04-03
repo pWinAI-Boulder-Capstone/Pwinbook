@@ -55,6 +55,7 @@ class SourceChatSessionWithMessagesResponse(SourceChatSessionResponse):
 class SendMessageRequest(BaseModel):
     message: str = Field(..., description="User message content")
     model_override: Optional[str] = Field(None, description="Optional model override for this message")
+    max_images: int = Field(1, ge=1, le=5, description="Maximum number of images to generate for image requests")
 
 class SuccessResponse(BaseModel):
     success: bool = Field(True, description="Operation success status")
@@ -318,7 +319,8 @@ async def stream_source_chat_response(
     session_id: str,
     source_id: str,
     message: str,
-    model_override: Optional[str] = None
+    model_override: Optional[str] = None,
+    max_images: int = 1,
 ) -> AsyncGenerator[str, None]:
     """Stream the source chat response as Server-Sent Events."""
     try:
@@ -332,6 +334,7 @@ async def stream_source_chat_response(
         state_values["messages"] = state_values.get("messages", [])
         state_values["source_id"] = source_id
         state_values["model_override"] = model_override
+        state_values["max_images"] = max_images
         
         # Add user message to state
         user_message = HumanMessage(content=message)
@@ -431,7 +434,8 @@ async def send_message_to_source_chat(
                 session_id=session_id,
                 source_id=full_source_id,
                 message=request.message,
-                model_override=model_override
+                model_override=model_override,
+                max_images=request.max_images,
             ),
             media_type="text/plain",
             headers={

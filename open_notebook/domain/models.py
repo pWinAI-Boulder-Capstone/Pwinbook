@@ -11,6 +11,7 @@ from loguru import logger
 
 from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.base import ObjectModel, RecordModel
+from open_notebook.utils.openrouter_api import create_openrouter_embedding_model
 
 ModelType = Union[LanguageModel, EmbeddingModel, SpeechToTextModel, TextToSpeechModel]
 
@@ -121,6 +122,8 @@ class ModelManager:
                 config=kwargs,
             )
         elif model.type == "embedding":
+            if model.provider and model.provider.lower() == "openrouter":
+                return create_openrouter_embedding_model(model.name)
             return AIFactory.create_embedding(
                 model_name=model.name,
                 provider=model.provider,
@@ -179,8 +182,11 @@ class ModelManager:
         if not model_id:
             return None
         model = await self.get_model(model_id, **kwargs)
-        assert model is None or isinstance(model, EmbeddingModel), (
-            f"Expected EmbeddingModel but got {type(model)}"
+        # We only require the app-level contract: an embedding model with `aembed()`.
+        # Some provider adapters may not subclass `esperanto.EmbeddingModel` directly,
+        # especially when bridging via custom HTTP wrappers.
+        assert model is None or callable(getattr(model, "aembed", None)), (
+            f"Expected embedding model with callable aembed() but got {type(model)}"
         )
         return model
 

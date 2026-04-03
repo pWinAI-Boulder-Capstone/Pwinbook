@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import unquote, urlparse
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
@@ -15,6 +15,49 @@ from api.podcast_service import (
 )
 
 router = APIRouter()
+
+
+class PodcastCoverResponse(BaseModel):
+    image_data_url: Optional[str] = None
+    error: Optional[str] = None
+    cached: bool = False
+
+
+def _build_podcast_cover_prompt(episode) -> str:
+    """Compose an image prompt from episode metadata (no text in the final image)."""
+    name = getattr(episode, "name", None) or "Podcast episode"
+    briefing = (getattr(episode, "briefing", None) or "")[:1200]
+    content = (getattr(episode, "content", None) or "")[:2200]
+    t = getattr(episode, "transcript", None) or {}
+    dialogue_snippets: List[str] = []
+    if isinstance(t, dict):
+        arr = t.get("transcript") or t.get("dialogue") or []
+        if isinstance(arr, list):
+            for item in arr[:6]:
+                if isinstance(item, dict):
+                    d = item.get("dialogue") or item.get("text") or ""
+                    if isinstance(d, str) and d.strip():
+                        dialogue_snippets.append(d.strip()[:200])
+    dialogue_hint = " | ".join(dialogue_snippets)[:1000]
+
+    parts = [
+        "Wide 16:9 cinematic podcast cover illustration, abstract modern digital art, "
+        "bold color gradients and soft geometric forms, editorial quality, "
+        "absolutely no text, no letters, no words, no logos, no watermarks.",
+        f"Visual metaphor for a podcast episode titled (do not paint these words): {name}.",
+    ]
+    if briefing.strip():
+        parts.append(f"Mood and structure hints from show briefing (abstract only): {briefing}")
+    if content.strip():
+        parts.append(
+            "Subject atmosphere from research material (shapes and color only, not readable text): "
+            f"{content[:1800]}"
+        )
+    if dialogue_hint:
+        parts.append(f"Energy of opening conversation (abstract): {dialogue_hint}")
+
+    prompt = "\n\n".join(parts)
+    return prompt[:12_000]
 
 
 class PodcastEpisodeResponse(BaseModel):
@@ -150,6 +193,50 @@ async def list_podcast_episodes():
         raise HTTPException(
             status_code=500, detail=f"Failed to list podcast episodes: {str(e)}"
         )
+
+
+@router.post("/podcasts/episodes/{episode_id}/cover-image", response_model=PodcastCoverResponse)
+async def generate_podcast_episode_cover(
+    episode_id: str,
+    force: bool = Query(False, description="Regenerate even if a cover is already stored"),
+):
+    """
+    Generate cover art for an episode using the default OpenRouter image model.
+    Caches the data URL on the episode transcript under `cover_image_data_url`.
+    """
+    try:
+        episode = await PodcastService.get_episode(episode_id)
+    except Exception as e:
+        logger.error(f"Cover image: episode not found {episode_id}: {e}")
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    t = episode.transcript if isinstance(episode.transcript, dict) else {}
+    existing = t.get("cover_image_data_url") if isinstance(t, dict) else None
+    if (
+        not force
+        and isinstance(existing, str)
+        and existing.startswith("data:image/")
+    ):
+        return PodcastCoverResponse(image_data_url=existing, cached=True)
+
+    try:
+        from open_notebook.utils.openrouter_api import generate_image
+
+        prompt = _build_podcast_cover_prompt(episode)
+        result = await generate_image(prompt)
+    except Exception as e:
+        logger.exception(e)
+        return PodcastCoverResponse(error=str(e)[:500])
+
+    if isinstance(result, str) and result.startswith("data:image/"):
+        merged = dict(t) if isinstance(t, dict) else {}
+        merged["cover_image_data_url"] = result
+        episode.transcript = merged
+        await episode.save()
+        return PodcastCoverResponse(image_data_url=result, cached=False)
+
+    err = result if isinstance(result, str) else "Image generation failed"
+    return PodcastCoverResponse(error=err[:500])
 
 
 @router.get("/podcasts/episodes/{episode_id}", response_model=PodcastEpisodeResponse)

@@ -96,7 +96,7 @@ export function useSourceChat(sourceId: string) {
   })
 
   // Send message with streaming
-  const sendMessage = useCallback(async (message: string, modelOverride?: string) => {
+  const sendMessage = useCallback(async (message: string, modelOverride?: string, maxImages: number = 1) => {
     let sessionId = currentSessionId
 
     // Auto-create session if none exists
@@ -127,7 +127,8 @@ export function useSourceChat(sourceId: string) {
     try {
       const response = await sourceChatApi.sendMessage(sourceId, sessionId, {
         message,
-        model_override: modelOverride
+        model_override: modelOverride,
+        max_images: maxImages,
       })
 
       if (!response) {
