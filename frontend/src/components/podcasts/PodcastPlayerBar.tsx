@@ -63,7 +63,7 @@ export function PodcastPlayerBar({
   return (
     <div
       className={cn(
-        'border-t bg-background/95 px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur supports-[backdrop-filter]:bg-background/80',
+        'border-t px-4 py-3',
         className
       )}
     >
