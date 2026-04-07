@@ -34,6 +34,12 @@ export function extractTranscriptEntries(transcript: unknown): TranscriptEntry[]
   return []
 }
 
+export type StoredLineTiming = {
+  lineIndex: number
+  start: number
+  end: number
+}
+
 export function getTranscriptMeta(transcript: unknown): {
   audioError?: string
   audioSkipped?: string
@@ -42,6 +48,7 @@ export function getTranscriptMeta(transcript: unknown): {
     duration_minutes?: number
     target_range_minutes?: [number, number]
     warning?: string
+    line_timings?: StoredLineTiming[]
   }
 } {
   if (transcript && typeof transcript === 'object') {
@@ -55,6 +62,7 @@ export function getTranscriptMeta(transcript: unknown): {
             duration_minutes?: number
             target_range_minutes?: [number, number]
             warning?: string
+            line_timings?: StoredLineTiming[]
           }
         | undefined,
     }

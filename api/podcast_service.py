@@ -145,7 +145,7 @@ async def _run_workflow_background(
         # --- Transcript Word Count Validation ---
         preset = PODCAST_LENGTH_PRESETS.get(podcast_length, PODCAST_LENGTH_PRESETS["medium"])
         total_words = sum(len(line.dialogue.split()) for line in transcript_lines)
-        expected_words = preset.get("target_duration_minutes", 7) * 120  # 120 wpm effective rate
+        expected_words = preset.get("target_duration_minutes", 7) * 150  # 150 wpm effective rate
         min_words = int(expected_words * 0.5)  # lower bound: 50% of target
         logger.info(
             f"Transcript word count: {total_words} words "
@@ -229,7 +229,8 @@ async def _run_workflow_background(
 
             ep_profile = episode.episode_profile if isinstance(episode.episode_profile, dict) else {}
             profile_image_model = ep_profile.get("image_model") or None
-            prompt = await _build_podcast_cover_prompt(episode)
+            text_model_id = ep_profile.get("outline_model") or None
+            prompt = await _build_podcast_cover_prompt(episode, text_model_id=text_model_id)
             result = await generate_image(prompt, model_id=profile_image_model)
 
             if isinstance(result, str) and result.startswith("data:image/"):

@@ -14,50 +14,86 @@ export type LineTiming = {
 }
 
 /**
- * Assigns each spoken word a time slice proportional to its character weight
- * so longer words get slightly more time. Total spans [0, duration].
- * (No real word timestamps from TTS — this approximates alignment.)
+ * Assigns each spoken word a time slice proportional to its character weight,
+ * with pause-weight gaps between lines to model the inter-clip silence
+ * that the TTS pipeline inserts (200ms same-speaker, 500ms speaker-change).
+ * All weights share the same proportional pool so the total always
+ * spans exactly [0, durationSeconds] — no fragile subtraction.
  */
+
+// Average word duration at ~150 wpm ≈ 0.4s.  We convert pause durations
+// into equivalent "word weights" so they compete proportionally.
+const AVG_WORD_WEIGHT = 2.0           // mean of  max(1.5, len*0.35+1)  for typical words
+const AVG_WORD_DURATION_S = 0.4       // ~150 wpm
+const WEIGHT_PER_SECOND = AVG_WORD_WEIGHT / AVG_WORD_DURATION_S  // ≈ 5.0
+
+const SAME_SPEAKER_PAUSE_WEIGHT = 0.2 * WEIGHT_PER_SECOND   // 1.0
+const SPEAKER_CHANGE_PAUSE_WEIGHT = 0.5 * WEIGHT_PER_SECOND // 2.5
+
+type WeightedItem = {
+  kind: 'word' | 'pause'
+  globalIndex: number   // -1 for pauses
+  lineIndex: number     // line the word belongs to, or next line for pauses
+  weight: number
+}
+
 export function buildWordTimings(
   entries: TranscriptEntry[],
   durationSeconds: number
 ): WordTiming[] {
-  type Acc = {
-    globalIndex: number
-    lineIndex: number
-    weight: number
+  if (!entries.length || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return []
   }
-  const weighted: Acc[] = []
+
+  // Build interleaved list of words + pause gaps
+  const items: WeightedItem[] = []
   let gi = 0
+  let lastLineWithWords = -1
 
   entries.forEach((entry, lineIndex) => {
     const text = (entry.dialogue ?? entry.text ?? '').trim()
     if (!text) return
-    const parts = text.split(/\s+/).filter(Boolean)
-    for (const w of parts) {
+    const words = text.split(/\s+/).filter(Boolean)
+    if (words.length === 0) return
+
+    // Insert a pause gap before this line (if not the first line with words)
+    if (lastLineWithWords >= 0) {
+      const prevSpeaker = entries[lastLineWithWords]?.speaker ?? ''
+      const currSpeaker = entry.speaker ?? ''
+      const pw = prevSpeaker === currSpeaker
+        ? SAME_SPEAKER_PAUSE_WEIGHT
+        : SPEAKER_CHANGE_PAUSE_WEIGHT
+      items.push({ kind: 'pause', globalIndex: -1, lineIndex, weight: pw })
+    }
+    lastLineWithWords = lineIndex
+
+    for (const w of words) {
       const weight = Math.max(1.5, w.length * 0.35 + 1)
-      weighted.push({ globalIndex: gi++, lineIndex, weight })
+      items.push({ kind: 'word', globalIndex: gi++, lineIndex, weight })
     }
   })
 
-  const totalW = weighted.reduce((s, x) => s + x.weight, 0)
-  if (weighted.length === 0 || totalW <= 0 || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    return []
+  const totalW = items.reduce((s, x) => s + x.weight, 0)
+  if (items.length === 0 || totalW <= 0) return []
+
+  // Distribute durationSeconds proportionally across all items
+  let t = 0
+  const out: WordTiming[] = []
+  for (const item of items) {
+    const len = durationSeconds * (item.weight / totalW)
+    if (item.kind === 'word') {
+      out.push({
+        globalIndex: item.globalIndex,
+        lineIndex: item.lineIndex,
+        start: t,
+        end: t + len,
+      })
+    }
+    // For pauses, we just advance t (no WordTiming emitted)
+    t += len
   }
 
-  let t = 0
-  const out: WordTiming[] = weighted.map((x) => {
-    const len = durationSeconds * (x.weight / totalW)
-    const start = t
-    const end = t + len
-    t = end
-    return {
-      globalIndex: x.globalIndex,
-      lineIndex: x.lineIndex,
-      start,
-      end,
-    }
-  })
+  // Snap last word to exact duration
   if (out.length > 0) {
     out[out.length - 1] = {
       ...out[out.length - 1],

@@ -42,8 +42,8 @@ async def writer_agent(
     logger.info(f"writer starting segment {segment_index}: '{segment.name}'")
 
     try:
-        # Effective TTS rate ~120 wpm (accounts for inter-speaker pauses)
-        EFFECTIVE_WPM = 120
+        # Effective TTS rate ~150 wpm (matches actual TTS speaking speed)
+        EFFECTIVE_WPM = 150
         words_per_turn = target_words_per_turn or 40
 
         if target_duration_minutes and num_segments > 0:

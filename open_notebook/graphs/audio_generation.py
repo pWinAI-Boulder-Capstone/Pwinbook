@@ -156,7 +156,7 @@ def _combine_clips_with_pauses(
     clip_paths: List[Path],
     transcript: List[TranscriptLine],
     output_path: Path,
-) -> Tuple[Path, float]:
+) -> Tuple[Path, float, List[Dict]]:
     """Combine audio clips with natural pauses using pydub (fast, no re-encoding).
 
     Adds a short pause between same-speaker lines and a longer pause
@@ -168,7 +168,8 @@ def _combine_clips_with_pauses(
         output_path: Where to write the final combined MP3
 
     Returns:
-        Tuple of (path to combined MP3, duration in seconds)
+        Tuple of (path to combined MP3, duration in seconds, line_timings list)
+        where line_timings is [{lineIndex, start, end}, ...] with exact seconds.
     """
     if not clip_paths:
         raise ValueError("No clips to combine")
@@ -178,7 +179,17 @@ def _combine_clips_with_pauses(
 
     logger.info(f"Combining {len(clip_paths)} clips with natural pauses...")
 
+    line_timings: List[Dict] = []
+    cursor_ms = 0.0  # running position in milliseconds
+
     combined = AudioSegment.from_mp3(str(clip_paths[0]))
+    clip_dur_ms = len(combined)
+    line_timings.append({
+        "lineIndex": 0,
+        "start": round(cursor_ms / 1000, 3),
+        "end": round((cursor_ms + clip_dur_ms) / 1000, 3),
+    })
+    cursor_ms += clip_dur_ms
 
     for i in range(1, len(clip_paths)):
         # Pick pause duration based on speaker change
@@ -187,10 +198,20 @@ def _combine_clips_with_pauses(
 
         if prev_speaker != curr_speaker:
             combined += change_pause
+            cursor_ms += SPEAKER_CHANGE_PAUSE_MS
         else:
             combined += same_pause
+            cursor_ms += SAME_SPEAKER_PAUSE_MS
 
-        combined += AudioSegment.from_mp3(str(clip_paths[i]))
+        clip = AudioSegment.from_mp3(str(clip_paths[i]))
+        clip_dur_ms = len(clip)
+        line_timings.append({
+            "lineIndex": i,
+            "start": round(cursor_ms / 1000, 3),
+            "end": round((cursor_ms + clip_dur_ms) / 1000, 3),
+        })
+        cursor_ms += clip_dur_ms
+        combined += clip
 
     # Export as MP3
     combined.export(str(output_path), format="mp3")
@@ -199,7 +220,7 @@ def _combine_clips_with_pauses(
         f"Combined audio: {duration_secs:.1f}s ({duration_secs / 60:.1f} min), "
         f"saved to {output_path}"
     )
-    return output_path, duration_secs
+    return output_path, duration_secs, line_timings
 
 
 def validate_audio_duration(
@@ -353,12 +374,13 @@ async def generate_audio_from_transcript(
     final_filename = f"{episode_name}.mp3"
     final_path = audio_dir / final_filename
 
-    final_path, duration_secs = _combine_clips_with_pauses(
+    final_path, duration_secs, line_timings = _combine_clips_with_pauses(
         all_clip_paths, transcript, final_path
     )
 
     # Validate duration against target range
     duration_info = validate_audio_duration(duration_secs, podcast_length)
+    duration_info["line_timings"] = line_timings
 
     logger.info(f"Final audio saved to: {final_path}")
     return final_path, duration_info

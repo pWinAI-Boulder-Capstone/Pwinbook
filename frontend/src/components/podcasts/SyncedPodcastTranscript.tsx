@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { cn } from '@/lib/utils'
-import type { TranscriptEntry } from '@/lib/utils/podcast-episode'
+import type { TranscriptEntry, StoredLineTiming } from '@/lib/utils/podcast-episode'
 import {
   buildLineTimings,
   buildWordTimings,
@@ -19,6 +19,8 @@ interface SyncedPodcastTranscriptProps {
   hasAudio: boolean
   /** Seek to a specific time (seconds). */
   onSeek?: (timeSeconds: number) => void
+  /** Exact per-line timings from backend (if available). */
+  storedLineTimings?: StoredLineTiming[]
 }
 
 /** Stable color per speaker so each voice gets a consistent accent. */
@@ -42,16 +44,21 @@ export function SyncedPodcastTranscript({
   duration,
   hasAudio,
   onSeek,
+  storedLineTimings,
 }: SyncedPodcastTranscriptProps) {
-  const wordTimings = useMemo(
-    () => buildWordTimings(entries, duration),
-    [entries, duration]
-  )
-
-  const lineTimings = useMemo(
-    () => buildLineTimings(wordTimings),
-    [wordTimings]
-  )
+  // Use exact backend timings when available, fall back to estimation
+  const lineTimings: LineTiming[] = useMemo(() => {
+    if (storedLineTimings && storedLineTimings.length > 0) {
+      return storedLineTimings.map((t) => ({
+        lineIndex: t.lineIndex,
+        start: t.start,
+        end: t.end,
+      }))
+    }
+    // Fallback: proportional estimation for older episodes without stored timings
+    const wt = buildWordTimings(entries, duration)
+    return buildLineTimings(wt)
+  }, [storedLineTimings, entries, duration])
 
   const activeLineIdx = useMemo(() => {
     if (!hasAudio || lineTimings.length === 0 || duration <= 0) return -1
@@ -70,6 +77,7 @@ export function SyncedPodcastTranscript({
         speaker: entry.speaker ?? 'Speaker',
         text: (entry.dialogue ?? entry.text ?? '').trim(),
         citation: entry.citation,
+        pronunciationNotes: entry.pronunciation_notes,
       })),
     [entries]
   )
@@ -173,6 +181,13 @@ export function SyncedPodcastTranscript({
             >
               {line.text || <span className="text-muted-foreground">—</span>}
             </p>
+
+            {/* Pronunciation notes */}
+            {line.pronunciationNotes ? (
+              <p className="mt-1 text-[11px] text-muted-foreground/40 font-mono">
+                🔊 {line.pronunciationNotes}
+              </p>
+            ) : null}
 
             {/* Citation */}
             {line.citation ? (

@@ -350,6 +350,7 @@ export default function PodcastEpisodePage() {
                       duration={playback.duration}
                       hasAudio={Boolean(audioSrc && playback.duration > 0)}
                       onSeek={handleSeekSeconds}
+                      storedLineTimings={transcriptMeta.durationInfo?.line_timings}
                     />
                   </div>
                 ) : (

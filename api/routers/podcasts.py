@@ -27,7 +27,7 @@ class PodcastCoverResponse(BaseModel):
     cached: bool = False
 
 
-async def _build_podcast_cover_prompt(episode) -> str:
+async def _build_podcast_cover_prompt(episode, text_model_id: str = None) -> str:
     """Use an LLM to generate a focused image prompt based on the podcast content."""
     name = getattr(episode, "name", None) or "Podcast episode"
     briefing = (getattr(episode, "briefing", None) or "")[:1500]
@@ -52,34 +52,40 @@ async def _build_podcast_cover_prompt(episode) -> str:
     content_summary = "\n\n".join(content_parts)
 
     system_prompt = (
-        "You are an expert visual art director. Given a podcast episode's title, description, "
-        "and dialogue, produce a single concise image generation prompt (200-400 words) for a "
-        "wide 16:9 podcast cover illustration.\n\n"
-        "RULES:\n"
-        "- Identify the CORE SUBJECT and KEY THEMES of the podcast and build the image around them.\n"
-        "- Use specific, concrete visual elements that directly relate to the podcast topic.\n"
-        "- Style: cinematic digital art, vivid colors, painterly with subtle surreal touches.\n"
-        "- NO text, NO letters, NO words, NO logos, NO watermarks in the image.\n"
-        "- Do NOT mention the podcast title as rendered text — only use it to understand the theme.\n"
-        "- Focus on 2-3 strong visual metaphors that capture the episode's essence.\n"
-        "- Include lighting, color palette, and composition directions.\n"
-        "- Output ONLY the image prompt, nothing else."
+        "You are an image prompt writer. Your ONLY job: read the podcast content below "
+        "and write a single image generation prompt (40-80 words) that visually represents "
+        "the podcast's topic.\n\n"
+        "The podcast is about: " + name + "\n\n"
+        "Write an image prompt that shows something DIRECTLY RELATED to this topic. "
+        "For example:\n"
+        "- Podcast about 'Vision Transformers' → 'Wide 16:9 cinematic podcast cover illustration: "
+        "a grid of image patches flowing through luminous neural network layers, attention lines "
+        "connecting distant patches, vivid blues and purples, dramatic lighting, cinematic digital art'\n"
+        "- Podcast about 'Climate Change' → 'Wide 16:9 cinematic podcast cover illustration: "
+        "polar ice cap cracking apart under warm orange sunset, ocean water rising around glaciers, "
+        "vivid colors, dramatic lighting, cinematic digital art'\n\n"
+        "Your prompt MUST be about: " + name + "\n"
+        "Style: vivid cinematic digital art with rich colors and dramatic lighting. "
+        "Always start with 'Wide 16:9 cinematic podcast cover illustration:'.\n"
+        "Do NOT generate charts, graphs, people sitting on benches, or generic stock-photo scenes.\n"
+        "No text, no letters, no words, no logos, no watermarks in the image.\n"
+        "Output ONLY the image prompt, nothing else."
     )
 
     try:
         from open_notebook.graphs.utils import provision_langchain_model
         from langchain_core.messages import SystemMessage, HumanMessage
 
-        model = await provision_langchain_model(content_summary, None, "chat", max_tokens=600)
+        model = await provision_langchain_model(content_summary, text_model_id, "chat", max_tokens=2000)
         response = model.invoke([
             SystemMessage(content=system_prompt),
-            HumanMessage(content=content_summary),
+            HumanMessage(content=f"Write an image prompt for this podcast:\n\n{content_summary}"),
         ])
-        llm_prompt = (getattr(response, "content", None) or str(response)).strip()
-        if llm_prompt and len(llm_prompt) > 50:
-            logger.info(f"Cover prompt: LLM generated {len(llm_prompt)} chars for '{name}'")
+        llm_prompt = (getattr(response, "content", None) or "").strip()
+        if llm_prompt and len(llm_prompt) > 20:
+            logger.info(f"Cover prompt: LLM generated for '{name}': {llm_prompt}")
             return llm_prompt[:4000]
-        logger.warning("Cover prompt: LLM response too short, using fallback")
+        logger.warning(f"Cover prompt: LLM response too short for '{name}': {llm_prompt!r}")
     except Exception as e:
         logger.warning(f"Cover prompt: LLM failed ({e}), using fallback")
 
@@ -261,13 +267,25 @@ async def generate_podcast_episode_cover(
 
         try:
             from open_notebook.utils.openrouter_api import generate_image
+            from open_notebook.domain.podcast import EpisodeProfile
 
-            prompt = await _build_podcast_cover_prompt(episode)
-            logger.info(f"Cover image: generating for {episode_id} (force={force})")
-
-            # Check for per-profile image model override
+            # Use the LIVE profile from DB (not the frozen snapshot on the episode)
+            # so that model changes in settings take effect for cover generation
             ep_profile = episode.episode_profile if isinstance(episode.episode_profile, dict) else {}
-            profile_image_model = ep_profile.get("image_model") or None
+            profile_name = ep_profile.get("name")
+            live_profile = await EpisodeProfile.get_by_name(profile_name) if profile_name else None
+
+            if live_profile:
+                profile_image_model = live_profile.image_model or None
+                text_model_id = live_profile.outline_model or None
+                logger.info(f"Cover image: using LIVE profile '{profile_name}', outline_model={text_model_id!r}, image_model={profile_image_model!r}")
+            else:
+                profile_image_model = ep_profile.get("image_model") or None
+                text_model_id = ep_profile.get("outline_model") or None
+                logger.info(f"Cover image: live profile '{profile_name}' not found, using snapshot: outline_model={text_model_id!r}, image_model={profile_image_model!r}")
+
+            prompt = await _build_podcast_cover_prompt(episode, text_model_id=text_model_id)
+            logger.info(f"Cover image: generating for {episode_id} (force={force})")
 
             result = await generate_image(prompt, model_id=profile_image_model)
         except Exception as e:
