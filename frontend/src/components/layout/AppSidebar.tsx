@@ -46,13 +46,13 @@ const mainNav = [
   { name: 'Sources', href: '/sources', icon: FileText, desc: 'Collect' },
   { name: 'Notebooks', href: '/notebooks', icon: Book, desc: 'Organize' },
   { name: 'Podcasts', href: '/podcasts', icon: Mic, desc: 'Create' },
-  { name: 'Podcast Studio', href: '/podcast-studio', icon: Users, desc: 'Discuss' },
+  // { name: 'Podcast Studio', href: '/podcast-studio', icon: Users, desc: 'Discuss' },
   { name: 'Flashcards', href: '/flashcards', icon: Brain, desc: 'Study' },
 ] as const
 
 const settingsNav = [
   { name: 'Models', href: '/models', icon: Bot },
-  { name: 'Transformations', href: '/transformations', icon: Shuffle },
+  // { name: 'Transformations', href: '/transformations', icon: Shuffle },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 

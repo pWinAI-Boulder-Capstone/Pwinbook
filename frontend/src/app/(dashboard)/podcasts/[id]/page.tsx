@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, List, RefreshCw } from 'lucide-react'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { PodcastPlayerBar } from '@/components/podcasts/PodcastPlayerBar'
@@ -19,6 +19,7 @@ import {
   extractTranscriptEntries,
   getTranscriptMeta,
 } from '@/lib/utils/podcast-episode'
+import { Badge } from '@/components/ui/badge'
 
 export default function PodcastEpisodePage() {
   const params = useParams()
@@ -31,6 +32,7 @@ export default function PodcastEpisodePage() {
   const { audioSrc, audioError } = usePodcastEpisodeAudio(episode)
   const playback = usePodcastAudioPlayback(audioSrc)
 
+  const [outlineOpen, setOutlineOpen] = useState(false)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [coverLoading, setCoverLoading] = useState(false)
   const [coverRegenerating, setCoverRegenerating] = useState(false)
@@ -207,8 +209,97 @@ export default function PodcastEpisodePage() {
                 </div>
               </div>
 
-              {/* Transcript — Illuminate-style centered scroll */}
-              <div className="flex-1">
+              {/* Horizontal layout: optional outline side-panel + transcript */}
+              <div className="flex min-h-0 flex-1">
+                {/* Outline side panel */}
+                {episode.outline &&
+                  typeof episode.outline === 'object' &&
+                  Array.isArray((episode.outline as Record<string, unknown>).segments) &&
+                  ((episode.outline as Record<string, unknown>).segments as unknown[]).length > 0 && (
+                    <>
+                      <div
+                        className={`shrink-0 border-r bg-muted/30 transition-[width] duration-300 ease-in-out overflow-hidden ${
+                          outlineOpen ? 'w-152' : 'w-0'
+                        }`}
+                      >
+                        <div className="flex h-full w-152 flex-col">
+                          <div className="flex items-center justify-between border-b px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <List className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-semibold">Outline</span>
+                              <Badge variant="secondary" className="text-[10px]">
+                                {((episode.outline as Record<string, unknown>).segments as unknown[]).length}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => setOutlineOpen(false)}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="flex-1 overflow-y-auto scrollbar-hide p-3 space-y-2">
+                            {((episode.outline as Record<string, unknown>).segments as Array<{ name?: string; description?: string; size?: string }>).map(
+                              (seg, idx) => (
+                                <div
+                                  key={idx}
+                                  className="rounded-lg border bg-card px-3 py-2.5"
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                                      {idx + 1}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-sm font-medium leading-snug">
+                                          {seg.name ?? `Segment ${idx + 1}`}
+                                        </span>
+                                        {seg.size && (
+                                          <Badge variant="outline" className="ml-auto shrink-0 text-[9px] uppercase">
+                                            {seg.size}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      {seg.description && (
+                                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                          {seg.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Toggle button — visible when panel is closed */}
+                      {!outlineOpen && (
+                        <div className="flex shrink-0 items-start border-r">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto rounded-none px-2.5 py-4 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            onClick={() => setOutlineOpen(true)}
+                            title="Show outline"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <ChevronRight className="h-4 w-4" />
+                              <span className="text-xs font-medium tracking-wide [writing-mode:vertical-lr]">
+                                Outline
+                              </span>
+                            </div>
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                {/* Transcript — fills remaining space */}
+                <div className="min-w-0 flex-1 overflow-y-auto scrollbar-hide">
                 {transcriptMeta.audioError ? (
                   <div className="mx-auto max-w-3xl px-4 pt-4 sm:px-6">
                     <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
@@ -236,6 +327,7 @@ export default function PodcastEpisodePage() {
 
                 {/* Bottom padding so transcript doesn't hide behind player bar */}
                 <div className="h-32" />
+                </div>
               </div>
             </div>
 

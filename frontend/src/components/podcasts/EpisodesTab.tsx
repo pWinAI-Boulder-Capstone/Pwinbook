@@ -100,14 +100,6 @@ export function EpisodesTab() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <SummaryBadge label="Total" value={statusCounts.total} />
-        <SummaryBadge label="Processing" value={statusCounts.running} />
-        <SummaryBadge label="Completed" value={statusCounts.completed} />
-        <SummaryBadge label="Failed" value={statusCounts.failed} />
-        <SummaryBadge label="Pending" value={statusCounts.pending} />
-      </div>
-
       {isError ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
