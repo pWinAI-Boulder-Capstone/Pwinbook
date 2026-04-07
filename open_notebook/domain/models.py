@@ -136,6 +136,17 @@ class ModelManager:
                 config=kwargs,
             )
         elif model.type == "text_to_speech":
+            if model.provider and model.provider.lower() == "openrouter":
+                import os
+                return AIFactory.create_text_to_speech(
+                    model_name=model.name,
+                    provider="openai-compatible",
+                    config={
+                        "base_url": "https://openrouter.ai/api/v1",
+                        "api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+                        **kwargs,
+                    },
+                )
             return AIFactory.create_text_to_speech(
                 model_name=model.name,
                 provider=model.provider,

@@ -297,6 +297,8 @@ async def get_provider_availability():
                     supported_types[provider].append("image_generation")
                 if "embedding" not in supported_types[provider]:
                     supported_types[provider].append("embedding")
+                if "text_to_speech" not in supported_types[provider]:
+                    supported_types[provider].append("text_to_speech")
             else:
                 # Standard provider detection
                 for model_type, providers in esperanto_available.items():
