@@ -222,6 +222,25 @@ async def _run_workflow_background(
             f"(workflow: {response.workflow_id})"
         )
 
+        # Generate cover art in background — non-critical, failures are silent
+        try:
+            from api.routers.podcasts import _build_podcast_cover_prompt
+            from open_notebook.utils.openrouter_api import generate_image
+
+            ep_profile = episode.episode_profile if isinstance(episode.episode_profile, dict) else {}
+            profile_image_model = ep_profile.get("image_model") or None
+            prompt = await _build_podcast_cover_prompt(episode)
+            result = await generate_image(prompt, model_id=profile_image_model)
+
+            if isinstance(result, str) and result.startswith("data:image/"):
+                merged = dict(episode.transcript) if isinstance(episode.transcript, dict) else {}
+                merged["cover_image_data_url"] = result
+                episode.transcript = merged
+                await episode.save()
+                logger.info(f"Cover art generated for episode {episode_id}")
+        except Exception as cover_err:
+            logger.warning(f"Cover art generation failed for episode {episode_id}: {cover_err}")
+
     except Exception as e:
         logger.error(f"Background workflow failed for episode {episode_id}: {e}")
         try:
@@ -282,6 +301,7 @@ class PodcastService:
                     "transcript_model": episode_profile.transcript_model,
                     "num_segments": episode_profile.num_segments,
                     "default_briefing": episode_profile.default_briefing,
+                    "image_model": episode_profile.image_model or "",
                 },
                 speaker_profile={
                     "name": speaker_profile.name,

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
 import { EpisodeProfile, SpeakerProfile } from '@/lib/types/podcasts'
+import { Model } from '@/lib/types/models'
 import {
   useCreateEpisodeProfile,
   useUpdateEpisodeProfile,
@@ -44,6 +45,7 @@ const episodeProfileSchema = z.object({
     .int('Must be an integer')
     .min(3, 'At least 3 segments')
     .max(20, 'Maximum 20 segments'),
+  image_model: z.string().optional(),
 })
 
 export type EpisodeProfileFormValues = z.infer<typeof episodeProfileSchema>
@@ -54,6 +56,7 @@ interface EpisodeProfileFormDialogProps {
   onOpenChange: (open: boolean) => void
   speakerProfiles: SpeakerProfile[]
   modelOptions: Record<string, string[]>
+  imageModels: Model[]
   initialData?: EpisodeProfile
 }
 
@@ -63,6 +66,7 @@ export function EpisodeProfileFormDialog({
   onOpenChange,
   speakerProfiles,
   modelOptions,
+  imageModels,
   initialData,
 }: EpisodeProfileFormDialogProps) {
   const createProfile = useCreateEpisodeProfile()
@@ -86,6 +90,7 @@ export function EpisodeProfileFormDialog({
         transcript_model: initialData.transcript_model,
         default_briefing: initialData.default_briefing,
         num_segments: initialData.num_segments,
+        image_model: initialData.image_model ?? '',
       }
     }
 
@@ -99,6 +104,7 @@ export function EpisodeProfileFormDialog({
       transcript_model: firstModel,
       default_briefing: '',
       num_segments: 5,
+      image_model: '',
     }
   }, [initialData, modelOptions, providers, speakerProfiles])
 
@@ -408,6 +414,43 @@ export function EpisodeProfileFormDialog({
                 )}
               />
             </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Cover art
+              </h3>
+              <Separator className="mt-2" />
+            </div>
+            <Controller
+              control={control}
+              name="image_model"
+              render={({ field }) => (
+                <div className="space-y-2">
+                  <Label>Image generation model</Label>
+                  <Select
+                    value={field.value || '__default__'}
+                    onValueChange={(v) => field.onChange(v === '__default__' ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Use global default" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Use global default</SelectItem>
+                      {imageModels.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.provider} / {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Leave as default to use the model set in Models &gt; Default Model Assignments.
+                  </p>
+                </div>
+              )}
+            />
           </div>
 
           <div className="space-y-2">

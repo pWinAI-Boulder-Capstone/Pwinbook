@@ -11,8 +11,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from .token_utils import token_count
 
-# Pattern for matching thinking content in AI responses
-THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+# Pattern for matching thinking content in AI responses (<think> and <thinking>)
+THINK_PATTERN = re.compile(r"<think(?:ing)?>(.*?)</think(?:ing)?>", re.DOTALL)
 
 # Pattern for stripping markdown code fences (```json ... ``` or ``` ... ```)
 CODE_FENCE_PATTERN = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL)
@@ -162,4 +162,14 @@ def clean_thinking_content(content: str) -> str:
         "Here's the answer"
     """
     _, cleaned_content = parse_thinking_content(content)
-    return strip_code_fences(cleaned_content)
+    cleaned_content = strip_code_fences(cleaned_content)
+    # If the cleaned content has a text preamble before JSON, try to extract
+    # the JSON object/array (common with models that narrate before responding)
+    stripped = cleaned_content.strip()
+    if stripped and not stripped.startswith(("{", "[")):
+        first_brace = stripped.find("{")
+        first_bracket = stripped.find("[")
+        candidates = [i for i in (first_brace, first_bracket) if i > 0]
+        if candidates:
+            return stripped[min(candidates):]
+    return cleaned_content

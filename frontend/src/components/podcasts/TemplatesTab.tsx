@@ -50,6 +50,10 @@ export function TemplatesTab() {
     () => modelsByProvider(models, 'text_to_speech'),
     [models]
   )
+  const imageModels = useMemo(
+    () => models.filter((m) => m.type === 'image_generation'),
+    [models]
+  )
 
   const isLoading = loadingEpisodeProfiles || loadingSpeakerProfiles || loadingModels
   const hasError = episodeProfilesError || speakerProfilesError || modelsError
@@ -91,6 +95,7 @@ export function TemplatesTab() {
             episodeProfiles={episodeProfiles}
             speakerProfiles={speakerProfiles}
             modelOptions={languageModelOptions}
+            imageModels={imageModels}
           />
         </div>
       )}

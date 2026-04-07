@@ -1,5 +1,6 @@
+import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, HTTPException, Query
@@ -16,6 +17,9 @@ from api.podcast_service import (
 
 router = APIRouter()
 
+# Per-episode locks to prevent duplicate concurrent cover generation
+_cover_locks: Dict[str, asyncio.Lock] = {}
+
 
 class PodcastCoverResponse(BaseModel):
     image_data_url: Optional[str] = None
@@ -23,41 +27,69 @@ class PodcastCoverResponse(BaseModel):
     cached: bool = False
 
 
-def _build_podcast_cover_prompt(episode) -> str:
-    """Compose an image prompt from episode metadata (no text in the final image)."""
+async def _build_podcast_cover_prompt(episode) -> str:
+    """Use an LLM to generate a focused image prompt based on the podcast content."""
     name = getattr(episode, "name", None) or "Podcast episode"
-    briefing = (getattr(episode, "briefing", None) or "")[:1200]
-    content = (getattr(episode, "content", None) or "")[:2200]
+    briefing = (getattr(episode, "briefing", None) or "")[:1500]
     t = getattr(episode, "transcript", None) or {}
     dialogue_snippets: List[str] = []
     if isinstance(t, dict):
         arr = t.get("transcript") or t.get("dialogue") or []
         if isinstance(arr, list):
-            for item in arr[:6]:
+            for item in arr[:10]:
                 if isinstance(item, dict):
                     d = item.get("dialogue") or item.get("text") or ""
                     if isinstance(d, str) and d.strip():
-                        dialogue_snippets.append(d.strip()[:200])
-    dialogue_hint = " | ".join(dialogue_snippets)[:1000]
+                        dialogue_snippets.append(d.strip()[:300])
+    dialogue_text = "\n".join(dialogue_snippets)[:3000]
 
-    parts = [
-        "Wide 16:9 cinematic podcast cover illustration, abstract modern digital art, "
-        "bold color gradients and soft geometric forms, editorial quality, "
-        "absolutely no text, no letters, no words, no logos, no watermarks.",
-        f"Visual metaphor for a podcast episode titled (do not paint these words): {name}.",
-    ]
+    # Build a summary of the podcast content for the LLM
+    content_parts = [f"Episode title: {name}"]
     if briefing.strip():
-        parts.append(f"Mood and structure hints from show briefing (abstract only): {briefing}")
-    if content.strip():
-        parts.append(
-            "Subject atmosphere from research material (shapes and color only, not readable text): "
-            f"{content[:1800]}"
-        )
-    if dialogue_hint:
-        parts.append(f"Energy of opening conversation (abstract): {dialogue_hint}")
+        content_parts.append(f"Briefing/description: {briefing}")
+    if dialogue_text.strip():
+        content_parts.append(f"Opening dialogue:\n{dialogue_text}")
+    content_summary = "\n\n".join(content_parts)
 
-    prompt = "\n\n".join(parts)
-    return prompt[:12_000]
+    system_prompt = (
+        "You are an expert visual art director. Given a podcast episode's title, description, "
+        "and dialogue, produce a single concise image generation prompt (200-400 words) for a "
+        "wide 16:9 podcast cover illustration.\n\n"
+        "RULES:\n"
+        "- Identify the CORE SUBJECT and KEY THEMES of the podcast and build the image around them.\n"
+        "- Use specific, concrete visual elements that directly relate to the podcast topic.\n"
+        "- Style: cinematic digital art, vivid colors, painterly with subtle surreal touches.\n"
+        "- NO text, NO letters, NO words, NO logos, NO watermarks in the image.\n"
+        "- Do NOT mention the podcast title as rendered text — only use it to understand the theme.\n"
+        "- Focus on 2-3 strong visual metaphors that capture the episode's essence.\n"
+        "- Include lighting, color palette, and composition directions.\n"
+        "- Output ONLY the image prompt, nothing else."
+    )
+
+    try:
+        from open_notebook.graphs.utils import provision_langchain_model
+        from langchain_core.messages import SystemMessage, HumanMessage
+
+        model = await provision_langchain_model(content_summary, None, "chat", max_tokens=600)
+        response = model.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=content_summary),
+        ])
+        llm_prompt = (getattr(response, "content", None) or str(response)).strip()
+        if llm_prompt and len(llm_prompt) > 50:
+            logger.info(f"Cover prompt: LLM generated {len(llm_prompt)} chars for '{name}'")
+            return llm_prompt[:4000]
+        logger.warning("Cover prompt: LLM response too short, using fallback")
+    except Exception as e:
+        logger.warning(f"Cover prompt: LLM failed ({e}), using fallback")
+
+    # Fallback: simple direct prompt if LLM fails
+    return (
+        f"Wide 16:9 cinematic podcast cover illustration about: {name}. "
+        f"{briefing[:500]} "
+        "Style: vivid cinematic digital art with rich colors and dramatic lighting. "
+        "No text, no letters, no words, no logos, no watermarks."
+    )[:4000]
 
 
 class PodcastEpisodeResponse(BaseModel):
@@ -203,40 +235,56 @@ async def generate_podcast_episode_cover(
     """
     Generate cover art for an episode using the default OpenRouter image model.
     Caches the data URL on the episode transcript under `cover_image_data_url`.
+    Uses per-episode locking to prevent duplicate concurrent generation.
     """
-    try:
-        episode = await PodcastService.get_episode(episode_id)
-    except Exception as e:
-        logger.error(f"Cover image: episode not found {episode_id}: {e}")
-        raise HTTPException(status_code=404, detail="Episode not found")
+    # Acquire a per-episode lock so only one generation runs at a time
+    if episode_id not in _cover_locks:
+        _cover_locks[episode_id] = asyncio.Lock()
+    lock = _cover_locks[episode_id]
 
-    t = episode.transcript if isinstance(episode.transcript, dict) else {}
-    existing = t.get("cover_image_data_url") if isinstance(t, dict) else None
-    if (
-        not force
-        and isinstance(existing, str)
-        and existing.startswith("data:image/")
-    ):
-        return PodcastCoverResponse(image_data_url=existing, cached=True)
+    async with lock:
+        try:
+            episode = await PodcastService.get_episode(episode_id)
+        except Exception as e:
+            logger.error(f"Cover image: episode not found {episode_id}: {e}")
+            raise HTTPException(status_code=404, detail="Episode not found")
 
-    try:
-        from open_notebook.utils.openrouter_api import generate_image
+        t = episode.transcript if isinstance(episode.transcript, dict) else {}
+        existing = t.get("cover_image_data_url") if isinstance(t, dict) else None
+        if (
+            not force
+            and isinstance(existing, str)
+            and existing.startswith("data:image/")
+        ):
+            logger.debug(f"Cover image: returning cached cover for {episode_id}")
+            return PodcastCoverResponse(image_data_url=existing, cached=True)
 
-        prompt = _build_podcast_cover_prompt(episode)
-        result = await generate_image(prompt)
-    except Exception as e:
-        logger.exception(e)
-        return PodcastCoverResponse(error=str(e)[:500])
+        try:
+            from open_notebook.utils.openrouter_api import generate_image
 
-    if isinstance(result, str) and result.startswith("data:image/"):
-        merged = dict(t) if isinstance(t, dict) else {}
-        merged["cover_image_data_url"] = result
-        episode.transcript = merged
-        await episode.save()
-        return PodcastCoverResponse(image_data_url=result, cached=False)
+            prompt = await _build_podcast_cover_prompt(episode)
+            logger.info(f"Cover image: generating for {episode_id} (force={force})")
 
-    err = result if isinstance(result, str) else "Image generation failed"
-    return PodcastCoverResponse(error=err[:500])
+            # Check for per-profile image model override
+            ep_profile = episode.episode_profile if isinstance(episode.episode_profile, dict) else {}
+            profile_image_model = ep_profile.get("image_model") or None
+
+            result = await generate_image(prompt, model_id=profile_image_model)
+        except Exception as e:
+            logger.exception(f"Cover image generation failed for {episode_id}: {e}")
+            return PodcastCoverResponse(error=str(e)[:500])
+
+        if isinstance(result, str) and result.startswith("data:image/"):
+            merged = dict(t) if isinstance(t, dict) else {}
+            merged["cover_image_data_url"] = result
+            episode.transcript = merged
+            await episode.save()
+            logger.info(f"Cover image: saved new cover for {episode_id}")
+            return PodcastCoverResponse(image_data_url=result, cached=False)
+
+        err = result if isinstance(result, str) else "Image generation failed"
+        logger.warning(f"Cover image: generation returned non-image for {episode_id}: {err[:200]}")
+        return PodcastCoverResponse(error=err[:500])
 
 
 @router.get("/podcasts/episodes/{episode_id}", response_model=PodcastEpisodeResponse)

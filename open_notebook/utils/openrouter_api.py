@@ -134,15 +134,19 @@ def create_openrouter_embedding_model(model_name: str) -> OpenRouterEmbeddingMod
     return OpenRouterEmbeddingModel(model_name=model_name, api_key=api_key)
 
 
-async def generate_image(prompt: str) -> str:
+async def generate_image(prompt: str, model_id: Optional[str] = None) -> str:
     """
     Generate an image from a text prompt using the app's default OpenRouter image model.
+
+    Args:
+        prompt: The text prompt for image generation.
+        model_id: Optional model record ID to override the global default.
 
     Returns:
     - A data URL string (e.g. `data:image/png;base64,...`)
     - Or an error message string (to avoid crashing the chat flow)
     """
-    result = await generate_images(prompt=prompt, max_images=1)
+    result = await generate_images(prompt=prompt, max_images=1, model_id=model_id)
     if isinstance(result, str):
         return result
     return result[0] if result else "The model did not return an image."
@@ -163,9 +167,14 @@ def _extract_image_data_urls(message: Any) -> List[str]:
     return urls
 
 
-async def generate_images(prompt: str, max_images: int = 1) -> Union[List[str], str]:
+async def generate_images(prompt: str, max_images: int = 1, model_id: Optional[str] = None) -> Union[List[str], str]:
     """
     Generate one or more images from a text prompt using the app's default OpenRouter image model.
+
+    Args:
+        prompt: The text prompt for image generation.
+        max_images: Number of images to generate (1-5).
+        model_id: Optional model record ID to override the global default.
 
     Returns:
     - A list of data URL strings.
@@ -179,18 +188,21 @@ async def generate_images(prompt: str, max_images: int = 1) -> Union[List[str], 
     # Lazy import to avoid circular import issues at startup.
     from open_notebook.domain.models import DefaultModels, Model
 
-    defaults = await DefaultModels.get_instance()
-    model_id = getattr(defaults, "default_image_model", None) if defaults else None
-    if not model_id:
+    # Use explicit model_id if provided, otherwise fall back to global default
+    resolved_model_id = model_id
+    if not resolved_model_id:
+        defaults = await DefaultModels.get_instance()
+        resolved_model_id = getattr(defaults, "default_image_model", None) if defaults else None
+    if not resolved_model_id:
         return (
             "No default image model is set. Please set one in Models -> Default Model Assignments -> Image Generation Model."
         )
 
     try:
-        model_record = await Model.get(model_id)
+        model_record = await Model.get(resolved_model_id)
     except Exception as e:
-        logger.warning(f"Failed to load image model {model_id}: {e}")
-        return f"Could not load the selected image model: {model_id}."
+        logger.warning(f"Failed to load image model {resolved_model_id}: {e}")
+        return f"Could not load the selected image model: {resolved_model_id}."
 
     if model_record.provider.lower() != "openrouter":
         return (
@@ -203,11 +215,7 @@ async def generate_images(prompt: str, max_images: int = 1) -> Union[List[str], 
         f"prompt preview: {prompt[:150]!r}{'...' if len(prompt) > 150 else ''}"
     )
 
-    model_lower = (model_name or "").lower()
-    if "flux" in model_lower or "sourceful" in model_lower or "riverflow" in model_lower:
-        modalities = ["image"]
-    else:
-        modalities = ["image", "text"]
+    modalities = ["image"]
 
     async def _request_images(batch_size: int) -> Union[List[str], str]:
         payload = {

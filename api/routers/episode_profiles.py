@@ -20,6 +20,7 @@ class EpisodeProfileResponse(BaseModel):
     transcript_model: str
     default_briefing: str
     num_segments: int
+    image_model: str = ""
 
 
 @router.get("/episode-profiles", response_model=List[EpisodeProfileResponse])
@@ -39,7 +40,8 @@ async def list_episode_profiles():
                 transcript_provider=profile.transcript_provider,
                 transcript_model=profile.transcript_model,
                 default_briefing=profile.default_briefing,
-                num_segments=profile.num_segments
+                num_segments=profile.num_segments,
+                image_model=profile.image_model or "",
             )
             for profile in profiles
         ]
@@ -74,7 +76,8 @@ async def get_episode_profile(profile_name: str):
             transcript_provider=profile.transcript_provider,
             transcript_model=profile.transcript_model,
             default_briefing=profile.default_briefing,
-            num_segments=profile.num_segments
+            num_segments=profile.num_segments,
+            image_model=profile.image_model or "",
         )
         
     except HTTPException:
@@ -97,6 +100,7 @@ class EpisodeProfileCreate(BaseModel):
     transcript_model: str = Field(..., description="AI model for transcript generation")
     default_briefing: str = Field(..., description="Default briefing template")
     num_segments: int = Field(default=5, description="Number of podcast segments")
+    image_model: str = Field("", description="OpenRouter image model for cover art")
 
 
 @router.post("/episode-profiles", response_model=EpisodeProfileResponse)
@@ -112,7 +116,8 @@ async def create_episode_profile(profile_data: EpisodeProfileCreate):
             transcript_provider=profile_data.transcript_provider,
             transcript_model=profile_data.transcript_model,
             default_briefing=profile_data.default_briefing,
-            num_segments=profile_data.num_segments
+            num_segments=profile_data.num_segments,
+            image_model=profile_data.image_model or None,
         )
         
         await profile.save()
@@ -127,7 +132,8 @@ async def create_episode_profile(profile_data: EpisodeProfileCreate):
             transcript_provider=profile.transcript_provider,
             transcript_model=profile.transcript_model,
             default_briefing=profile.default_briefing,
-            num_segments=profile.num_segments
+            num_segments=profile.num_segments,
+            image_model=profile.image_model or "",
         )
         
     except Exception as e:
@@ -160,6 +166,7 @@ async def update_episode_profile(profile_id: str, profile_data: EpisodeProfileCr
         profile.transcript_model = profile_data.transcript_model
         profile.default_briefing = profile_data.default_briefing
         profile.num_segments = profile_data.num_segments
+        profile.image_model = profile_data.image_model or None
         
         await profile.save()
         
@@ -173,7 +180,8 @@ async def update_episode_profile(profile_id: str, profile_data: EpisodeProfileCr
             transcript_provider=profile.transcript_provider,
             transcript_model=profile.transcript_model,
             default_briefing=profile.default_briefing,
-            num_segments=profile.num_segments
+            num_segments=profile.num_segments,
+            image_model=profile.image_model or "",
         )
         
     except HTTPException:

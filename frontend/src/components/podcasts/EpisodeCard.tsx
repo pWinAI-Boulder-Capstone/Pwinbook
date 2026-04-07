@@ -1,10 +1,12 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { Clock, Mic, Play, Trash2 } from 'lucide-react'
+import { Clock, Loader2, Mic, Play, Trash2 } from 'lucide-react'
 
 import { EpisodeStatus, PodcastEpisode } from '@/lib/types/podcasts'
+import { podcastsApi } from '@/lib/api/podcasts'
 import { cn } from '@/lib/utils'
 import {
   AlertDialog,
@@ -88,6 +90,51 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
   const meta = STATUS_META[status]
   const gradient = STATUS_GRADIENT[status]
 
+  // Extract cached cover from transcript data
+  const cachedCover = (() => {
+    const t = episode.transcript as Record<string, unknown> | null | undefined
+    const url = t?.cover_image_data_url
+    return typeof url === 'string' && url.startsWith('data:image/') ? url : null
+  })()
+
+  const [coverUrl, setCoverUrl] = useState<string | null>(cachedCover)
+  const [coverLoading, setCoverLoading] = useState(false)
+  const generationAttempted = useRef(false)
+
+  // Sync cover from refetched episode data (e.g. background generation finished)
+  useEffect(() => {
+    if (cachedCover && !coverUrl) {
+      setCoverUrl(cachedCover)
+      setCoverLoading(false)
+    }
+  }, [cachedCover, coverUrl])
+
+  // Lazily generate cover for completed episodes that don't have one
+  useEffect(() => {
+    if (coverUrl || generationAttempted.current) return
+    if (status !== 'completed') return
+
+    generationAttempted.current = true
+    setCoverLoading(true)
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await podcastsApi.generateEpisodeCover(episode.id)
+        if (cancelled) return
+        if (res.image_data_url) {
+          setCoverUrl(res.image_data_url)
+        }
+      } catch {
+        // Silently ignore — tile falls back to gradient
+      } finally {
+        if (!cancelled) setCoverLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [coverUrl, status, episode.id])
+
   const createdLabel = episode.created
     ? formatDistanceToNow(new Date(episode.created), { addSuffix: true })
     : null
@@ -99,27 +146,50 @@ export function EpisodeCard({ episode, onDelete, deleting }: EpisodeCardProps) {
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5">
-      {/* Gradient header area with icon */}
+      {/* Cover image or gradient header */}
       <Link
         href={`/podcasts/${encodeURIComponent(episode.id)}`}
         className="block"
       >
         <div
           className={cn(
-            'relative flex h-32 items-center justify-center bg-gradient-to-br',
-            gradient
+            'relative flex h-36 items-center justify-center overflow-hidden',
+            !coverUrl && `bg-gradient-to-br ${gradient}`
           )}
         >
+          {coverUrl ? (
+            <>
+              <img
+                src={coverUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              {/* Subtle overlay so the icon remains readable */}
+              <div className="absolute inset-0 bg-black/20" />
+            </>
+          ) : null}
+
+          {/* Loading spinner for cover generation */}
+          {coverLoading && !coverUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {/* Center icon */}
           <div
             className={cn(
-              'flex h-16 w-16 items-center justify-center rounded-full bg-background/80 shadow-sm backdrop-blur-sm',
-              status === 'completed' && 'ring-2 ring-emerald-400/40'
+              'relative z-10 flex h-14 w-14 items-center justify-center rounded-full shadow-sm backdrop-blur-sm',
+              coverUrl
+                ? 'bg-black/40 text-white'
+                : 'bg-background/80',
+              status === 'completed' && !coverUrl && 'ring-2 ring-emerald-400/40'
             )}
           >
             {status === 'completed' ? (
-              <Play className="h-7 w-7 text-emerald-600 ml-0.5" />
+              <Play className={cn('h-6 w-6 ml-0.5', coverUrl ? 'text-white' : 'text-emerald-600')} />
             ) : (
-              <Mic className={cn('h-7 w-7', meta.iconColor)} />
+              <Mic className={cn('h-6 w-6', coverUrl ? 'text-white' : meta.iconColor)} />
             )}
           </div>
 

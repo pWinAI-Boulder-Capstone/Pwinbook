@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Copy, Edit3, MoreVertical, Trash2, Users } from 'lucide-react'
 
 import { EpisodeProfile, SpeakerProfile } from '@/lib/types/podcasts'
+import { Model } from '@/lib/types/models'
 import {
   useDeleteEpisodeProfile,
   useDuplicateEpisodeProfile,
@@ -41,6 +42,7 @@ interface EpisodeProfilesPanelProps {
   episodeProfiles: EpisodeProfile[]
   speakerProfiles: SpeakerProfile[]
   modelOptions: Record<string, string[]>
+  imageModels: Model[]
 }
 
 function findSpeakerSummary(
@@ -54,6 +56,7 @@ export function EpisodeProfilesPanel({
   episodeProfiles,
   speakerProfiles,
   modelOptions,
+  imageModels,
 }: EpisodeProfilesPanelProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [editProfile, setEditProfile] = useState<EpisodeProfile | null>(null)
@@ -238,6 +241,7 @@ export function EpisodeProfilesPanel({
         onOpenChange={setCreateOpen}
         speakerProfiles={speakerProfiles}
         modelOptions={modelOptions}
+        imageModels={imageModels}
       />
 
       <EpisodeProfileFormDialog
@@ -250,6 +254,7 @@ export function EpisodeProfilesPanel({
         }}
         speakerProfiles={speakerProfiles}
         modelOptions={modelOptions}
+        imageModels={imageModels}
         initialData={editProfile ?? undefined}
       />
     </div>

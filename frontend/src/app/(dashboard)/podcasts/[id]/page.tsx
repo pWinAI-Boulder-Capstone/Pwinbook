@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -37,6 +37,7 @@ export default function PodcastEpisodePage() {
   const [coverLoading, setCoverLoading] = useState(false)
   const [coverRegenerating, setCoverRegenerating] = useState(false)
   const [coverError, setCoverError] = useState<string | null>(null)
+  const coverFetchedRef = useRef(false)
 
   const transcriptEntries = useMemo(
     () => (episode ? extractTranscriptEntries(episode.transcript) : []),
@@ -56,8 +57,14 @@ export default function PodcastEpisodePage() {
     if (typeof existing === 'string' && existing.startsWith('data:image/')) {
       setCoverUrl(existing)
       setCoverError(null)
+      setCoverLoading(false)
+      coverFetchedRef.current = true
       return
     }
+
+    // Only attempt generation once per page load to avoid duplicate requests
+    if (coverFetchedRef.current) return
+    coverFetchedRef.current = true
 
     let cancelled = false
     setCoverLoading(true)
@@ -88,6 +95,7 @@ export default function PodcastEpisodePage() {
 
   const handleRegenerateCover = useCallback(async () => {
     if (!episode) return
+    coverFetchedRef.current = true  // prevent auto-fetch race if episode refetches
     setCoverRegenerating(true)
     setCoverError(null)
     try {
@@ -119,10 +127,23 @@ export default function PodcastEpisodePage() {
 
   return (
     <AppShell>
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Compact top bar with back button + episode info */}
-        <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
-          <Button variant="ghost" size="sm" asChild className="gap-2">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* ── Full-page background cover image ── */}
+        {coverUrl && (
+          <div className="pointer-events-none absolute inset-0 z-0">
+            <img
+              src={coverUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+            {/* Dark + blur overlay for readability */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          </div>
+        )}
+
+        {/* ── Top bar ── */}
+        <div className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/10 bg-black/30 px-4 py-3 backdrop-blur-md">
+          <Button variant="ghost" size="sm" asChild className="gap-2 text-white/80 hover:text-white hover:bg-white/10">
             <Link href="/podcasts">
               <ArrowLeft className="h-4 w-4" />
               Episodes
@@ -131,13 +152,13 @@ export default function PodcastEpisodePage() {
         </div>
 
         {isLoading ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
+          <div className="relative z-10 flex flex-1 items-center justify-center gap-2 text-white/60">
             <Loader2 className="h-5 w-5 animate-spin" />
             Loading episode…
           </div>
         ) : isError || !episode ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
+          <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm text-white/60">
               {error instanceof Error ? error.message : 'Episode not found.'}
             </p>
             <Button variant="outline" onClick={() => router.push('/podcasts')}>
@@ -146,13 +167,13 @@ export default function PodcastEpisodePage() {
           </div>
         ) : (
           <>
-            {/* Illuminate-style layout: compact header + full-width transcript */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              {/* Compact episode header with cover art */}
-              <div className="relative shrink-0 border-b bg-gradient-to-b from-primary/5 to-background">
+            {/* All content layered above the background */}
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {/* ── Glassmorphic episode header ── */}
+              <div className="shrink-0 border-b border-white/5">
                 <div className="mx-auto flex max-w-3xl items-center gap-4 px-4 py-5 sm:px-6 md:gap-6 md:py-8">
                   {/* Cover art thumbnail */}
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted shadow-lg ring-1 ring-black/5 sm:h-24 sm:w-24 md:h-28 md:w-28">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/20 sm:h-24 sm:w-24 md:h-28 md:w-28">
                     {coverUrl ? (
                       <img
                         src={coverUrl}
@@ -160,12 +181,12 @@ export default function PodcastEpisodePage() {
                         className="h-full w-full object-cover"
                       />
                     ) : coverLoading ? (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <div className="flex h-full w-full items-center justify-center bg-white/5">
+                        <Loader2 className="h-6 w-6 animate-spin text-white/40" />
                       </div>
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                        <span className="text-[10px] text-muted-foreground">
+                      <div className="flex h-full w-full items-center justify-center bg-white/5">
+                        <span className="text-[10px] text-white/40">
                           Podcast
                         </span>
                       </div>
@@ -173,16 +194,16 @@ export default function PodcastEpisodePage() {
                   </div>
                   {/* Title & metadata */}
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-xl font-bold leading-tight text-foreground sm:text-2xl md:text-3xl">
+                    <h1 className="text-xl font-bold leading-tight text-white sm:text-2xl md:text-3xl">
                       {episode.name}
                     </h1>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-white/50">
                       {transcriptEntries.length > 0 && (
                         <span>{transcriptEntries.length} lines</span>
                       )}
                       {playback.duration > 0 && (
                         <>
-                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-white/30">·</span>
                           <span>
                             {Math.floor(playback.duration / 60)}m{' '}
                             {Math.floor(playback.duration % 60)}s
@@ -190,21 +211,34 @@ export default function PodcastEpisodePage() {
                         </>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      disabled={coverRegenerating || coverLoading}
-                      onClick={handleRegenerateCover}
-                    >
-                      {coverRegenerating ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-3 w-3" />
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2 text-xs text-white/60 hover:text-white hover:bg-white/10"
+                        disabled={coverRegenerating || coverLoading}
+                        onClick={handleRegenerateCover}
+                      >
+                        {coverRegenerating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        New cover
+                      </Button>
+                      {(coverLoading || coverRegenerating) && (
+                        <span className="flex items-center gap-1.5 text-xs text-white/50">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {coverRegenerating ? 'Regenerating…' : 'Generating cover art…'}
+                        </span>
                       )}
-                      New cover
-                    </Button>
+                      {coverError && !coverLoading && !coverRegenerating && (
+                        <span className="text-xs text-red-400">
+                          Cover art failed — try &quot;New cover&quot;
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -218,15 +252,15 @@ export default function PodcastEpisodePage() {
                   ((episode.outline as Record<string, unknown>).segments as unknown[]).length > 0 && (
                     <>
                       <div
-                        className={`shrink-0 border-r bg-muted/30 transition-[width] duration-300 ease-in-out overflow-hidden ${
+                        className={`shrink-0 border-r border-white/10 bg-black/30 backdrop-blur-lg transition-[width] duration-300 ease-in-out overflow-hidden ${
                           outlineOpen ? 'w-152' : 'w-0'
                         }`}
                       >
                         <div className="flex h-full w-152 flex-col">
-                          <div className="flex items-center justify-between border-b px-4 py-3">
+                          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <List className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-semibold">Outline</span>
+                              <List className="h-4 w-4 text-white/50" />
+                              <span className="text-sm font-semibold text-white">Outline</span>
                               <Badge variant="secondary" className="text-[10px]">
                                 {((episode.outline as Record<string, unknown>).segments as unknown[]).length}
                               </Badge>
@@ -245,15 +279,15 @@ export default function PodcastEpisodePage() {
                               (seg, idx) => (
                                 <div
                                   key={idx}
-                                  className="rounded-lg border bg-card px-3 py-2.5"
+                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5"
                                 >
                                   <div className="flex items-start gap-2">
-                                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold text-white/80">
                                       {idx + 1}
                                     </span>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="text-sm font-medium leading-snug">
+                                        <span className="text-sm font-medium leading-snug text-white/90">
                                           {seg.name ?? `Segment ${idx + 1}`}
                                         </span>
                                         {seg.size && (
@@ -263,7 +297,7 @@ export default function PodcastEpisodePage() {
                                         )}
                                       </div>
                                       {seg.description && (
-                                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                        <p className="mt-1 text-xs leading-relaxed text-white/50">
                                           {seg.description}
                                         </p>
                                       )}
@@ -278,11 +312,11 @@ export default function PodcastEpisodePage() {
 
                       {/* Toggle button — visible when panel is closed */}
                       {!outlineOpen && (
-                        <div className="flex shrink-0 items-start border-r">
+                        <div className="flex shrink-0 items-start border-r border-white/10">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-auto rounded-none px-2.5 py-4 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            className="h-auto rounded-none px-2.5 py-4 text-white/50 hover:bg-white/10 hover:text-white"
                             onClick={() => setOutlineOpen(true)}
                             title="Show outline"
                           >
@@ -319,7 +353,7 @@ export default function PodcastEpisodePage() {
                     />
                   </div>
                 ) : (
-                  <p className="mx-auto max-w-3xl px-4 py-8 text-center text-sm text-muted-foreground sm:px-6">
+                  <p className="mx-auto max-w-3xl px-4 py-8 text-center text-sm text-white/50 sm:px-6">
                     No transcript lines yet. If generation is still running, check
                     back shortly.
                   </p>
@@ -332,7 +366,7 @@ export default function PodcastEpisodePage() {
             </div>
 
             {audioError ? (
-              <p className="shrink-0 border-t bg-destructive/10 px-4 py-2 text-center text-xs text-destructive">
+              <p className="relative z-10 shrink-0 border-t border-white/10 bg-red-900/30 backdrop-blur-md px-4 py-2 text-center text-xs text-red-300">
                 {audioError}
               </p>
             ) : null}
@@ -348,6 +382,7 @@ export default function PodcastEpisodePage() {
             ) : null}
 
             <PodcastPlayerBar
+              className="relative z-10 border-t border-white/10 bg-black/40 backdrop-blur-xl"
               audioSrc={audioSrc}
               title={episode.name}
               thumbnailSrc={coverUrl}
