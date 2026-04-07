@@ -7,6 +7,12 @@ export type WordTiming = {
   end: number
 }
 
+export type LineTiming = {
+  lineIndex: number
+  start: number
+  end: number
+}
+
 /**
  * Assigns each spoken word a time slice proportional to its character weight
  * so longer words get slightly more time. Total spans [0, duration].
@@ -59,6 +65,50 @@ export function buildWordTimings(
     }
   }
   return out
+}
+
+/**
+ * Builds line-level timing by aggregating word timings per line.
+ * Each line spans from its first word's start to its last word's end.
+ */
+export function buildLineTimings(wordTimings: WordTiming[]): LineTiming[] {
+  if (wordTimings.length === 0) return []
+
+  const lineMap = new Map<number, { start: number; end: number }>()
+  for (const wt of wordTimings) {
+    const existing = lineMap.get(wt.lineIndex)
+    if (!existing) {
+      lineMap.set(wt.lineIndex, { start: wt.start, end: wt.end })
+    } else {
+      existing.end = wt.end
+    }
+  }
+
+  const out: LineTiming[] = []
+  for (const [lineIndex, { start, end }] of lineMap) {
+    out.push({ lineIndex, start, end })
+  }
+  return out.sort((a, b) => a.start - b.start)
+}
+
+/** Which line (lineIndex) should be highlighted at currentTime. */
+export function getActiveLineIndex(
+  currentTime: number,
+  lineTimings: LineTiming[]
+): number {
+  if (lineTimings.length === 0) return -1
+  const t = Math.max(0, currentTime)
+  if (t < lineTimings[0].start) return lineTimings[0].lineIndex
+  const last = lineTimings[lineTimings.length - 1]
+  if (t >= last.end) return last.lineIndex
+  for (let i = 0; i < lineTimings.length; i++) {
+    const lt = lineTimings[i]
+    if (t >= lt.start && t < lt.end) return lt.lineIndex
+  }
+  for (let i = lineTimings.length - 1; i >= 0; i--) {
+    if (t >= lineTimings[i].start) return lineTimings[i].lineIndex
+  }
+  return lineTimings[0].lineIndex
 }
 
 /** Which word (global index) should be highlighted at currentTime. */

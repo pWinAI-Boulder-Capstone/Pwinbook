@@ -1,21 +1,39 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { cn } from '@/lib/utils'
 import type { TranscriptEntry } from '@/lib/utils/podcast-episode'
 import {
+  buildLineTimings,
   buildWordTimings,
-  getActiveWordGlobalIndex,
-  tokenizeLine,
+  getActiveLineIndex,
+  type LineTiming,
 } from '@/lib/utils/podcast-transcript-sync'
 
 interface SyncedPodcastTranscriptProps {
   entries: TranscriptEntry[]
   currentTime: number
   duration: number
-  /** When false, highlight stays on the word for currentTime (frozen). */
+  /** When false, highlight stays frozen. */
   hasAudio: boolean
+  /** Seek to a specific time (seconds). */
+  onSeek?: (timeSeconds: number) => void
+}
+
+/** Stable color per speaker so each voice gets a consistent accent. */
+const SPEAKER_COLORS = [
+  'hsl(221, 83%, 53%)',   // blue
+  'hsl(262, 83%, 58%)',   // purple
+  'hsl(142, 71%, 45%)',   // green
+  'hsl(24, 95%, 53%)',    // orange
+  'hsl(346, 77%, 50%)',   // rose
+  'hsl(187, 85%, 43%)',   // cyan
+]
+
+function getSpeakerColor(speaker: string, speakerList: string[]): string {
+  const idx = speakerList.indexOf(speaker)
+  return SPEAKER_COLORS[idx >= 0 ? idx % SPEAKER_COLORS.length : 0]
 }
 
 export function SyncedPodcastTranscript({
@@ -23,87 +41,148 @@ export function SyncedPodcastTranscript({
   currentTime,
   duration,
   hasAudio,
+  onSeek,
 }: SyncedPodcastTranscriptProps) {
-  const timings = useMemo(
+  const wordTimings = useMemo(
     () => buildWordTimings(entries, duration),
     [entries, duration]
   )
 
-  const activeIdx = useMemo(() => {
-    if (!hasAudio || timings.length === 0 || duration <= 0) return -1
-    return getActiveWordGlobalIndex(currentTime, timings)
-  }, [hasAudio, currentTime, duration, timings])
+  const lineTimings = useMemo(
+    () => buildLineTimings(wordTimings),
+    [wordTimings]
+  )
 
-  const lines = useMemo(() => {
-    let g = 0
-    return entries.map((entry, lineIndex) => ({
-      lineIndex,
-      speaker: entry.speaker ?? 'Speaker',
-      citation: entry.citation,
-      words: tokenizeLine(entry.dialogue ?? entry.text ?? '').map((word) => ({
-        word,
-        globalIndex: g++,
+  const activeLineIdx = useMemo(() => {
+    if (!hasAudio || lineTimings.length === 0 || duration <= 0) return -1
+    return getActiveLineIndex(currentTime, lineTimings)
+  }, [hasAudio, currentTime, duration, lineTimings])
+
+  const speakers = useMemo(
+    () => [...new Set(entries.map((e) => e.speaker ?? 'Speaker'))],
+    [entries]
+  )
+
+  const lines = useMemo(
+    () =>
+      entries.map((entry, lineIndex) => ({
+        lineIndex,
+        speaker: entry.speaker ?? 'Speaker',
+        text: (entry.dialogue ?? entry.text ?? '').trim(),
+        citation: entry.citation,
       })),
-    }))
-  }, [entries])
+    [entries]
+  )
 
-  const lastScrolledWord = useRef(-1)
+  // Build a lineIndex→LineTiming map for click-to-seek
+  const lineTimingMap = useMemo(() => {
+    const m = new Map<number, LineTiming>()
+    for (const lt of lineTimings) {
+      m.set(lt.lineIndex, lt)
+    }
+    return m
+  }, [lineTimings])
+
+  const handleLineClick = useCallback(
+    (lineIndex: number) => {
+      if (!onSeek) return
+      const lt = lineTimingMap.get(lineIndex)
+      if (lt) onSeek(lt.start)
+    },
+    [onSeek, lineTimingMap]
+  )
+
+  // Auto-scroll: keep active line centered
+  const containerRef = useRef<HTMLDivElement>(null)
+  const lastScrolledLine = useRef(-1)
+
   useEffect(() => {
-    lastScrolledWord.current = -1
+    lastScrolledLine.current = -1
   }, [entries, duration])
 
   useEffect(() => {
-    if (activeIdx < 0) return
-    if (activeIdx === lastScrolledWord.current) return
-    lastScrolledWord.current = activeIdx
-    const el = document.querySelector<HTMLElement>(
-      `[data-podcast-sync-word="${activeIdx}"]`
+    if (activeLineIdx < 0) return
+    if (activeLineIdx === lastScrolledLine.current) return
+    lastScrolledLine.current = activeLineIdx
+    const el = containerRef.current?.querySelector<HTMLElement>(
+      `[data-illuminate-line="${activeLineIdx}"]`
     )
-    el?.scrollIntoView({
+    if (!el) return
+    el.scrollIntoView({
       behavior: 'smooth',
-      block: 'nearest',
-      inline: 'nearest',
+      block: 'center',
     })
-  }, [activeIdx])
+  }, [activeLineIdx])
 
   return (
-    <div className="space-y-3 p-4">
-      {lines.map((line) => (
-        <div
-          key={line.lineIndex}
-          data-podcast-sync-line={line.lineIndex}
-          className="rounded-lg border bg-background p-3 text-sm shadow-sm"
-        >
-          <p className="font-semibold text-primary">{line.speaker}</p>
-          <p className="mt-1 text-foreground/90 leading-relaxed">
-            {line.words.length === 0 ? (
-              <span className="text-muted-foreground">—</span>
-            ) : (
-              line.words.map(({ word, globalIndex }, i) => {
-                const isActive = hasAudio && globalIndex === activeIdx
-                return (
-                  <span key={`${line.lineIndex}-${i}-${globalIndex}`} className="inline">
-                    <span
-                      data-podcast-sync-word={globalIndex}
-                      className={cn(
-                        'inline rounded-[3px] align-baseline transition-[background-color,box-shadow] duration-100',
-                        'px-[2px] mx-px',
-                        isActive && 'bg-primary/35 ring-1 ring-primary/50 ring-inset'
-                      )}
-                    >
-                      {word}
-                    </span>
-                    {i < line.words.length - 1 ? ' ' : null}
-                  </span>
-                )
-              })
+    <div ref={containerRef} className="flex flex-col gap-1 px-2 py-6 sm:px-4 md:px-8">
+      {lines.map((line) => {
+        const isActive = hasAudio && line.lineIndex === activeLineIdx
+        const isPast =
+          hasAudio &&
+          activeLineIdx >= 0 &&
+          line.lineIndex < activeLineIdx
+        const isFuture =
+          hasAudio &&
+          activeLineIdx >= 0 &&
+          line.lineIndex > activeLineIdx
+        const speakerColor = getSpeakerColor(line.speaker, speakers)
+
+        return (
+          <div
+            key={line.lineIndex}
+            data-illuminate-line={line.lineIndex}
+            onClick={() => handleLineClick(line.lineIndex)}
+            className={cn(
+              'group relative rounded-xl px-4 py-3 transition-all duration-300 ease-out',
+              onSeek && 'cursor-pointer',
+              isActive
+                ? 'bg-primary/10 scale-[1.01]'
+                : isPast
+                  ? 'opacity-50'
+                  : isFuture
+                    ? 'opacity-40'
+                    : '',
+              !hasAudio && 'opacity-100',
             )}
-          </p>
-          {line.citation ? (
-            <p className="mt-2 text-xs text-muted-foreground">{line.citation}</p>
-          ) : null}
-        </div>
-      ))}
+            style={
+              isActive
+                ? { borderLeft: `3px solid ${speakerColor}` }
+                : { borderLeft: '3px solid transparent' }
+            }
+          >
+            {/* Speaker name */}
+            <p
+              className={cn(
+                'text-xs font-semibold uppercase tracking-wider mb-1 transition-colors duration-300',
+                isActive ? 'opacity-100' : 'opacity-70',
+              )}
+              style={{ color: speakerColor }}
+            >
+              {line.speaker}
+            </p>
+
+            {/* Dialogue text */}
+            <p
+              className={cn(
+                'text-[15px] leading-relaxed transition-colors duration-300',
+                isActive
+                  ? 'text-foreground font-medium'
+                  : 'text-foreground/70',
+              )}
+            >
+              {line.text || <span className="text-muted-foreground">—</span>}
+            </p>
+
+            {/* Citation */}
+            {line.citation ? (
+              <p className="mt-1.5 text-xs text-muted-foreground/60 italic">
+                {line.citation}
+              </p>
+            ) : null}
+          </div>
+        )
+      })}
     </div>
   )
 }

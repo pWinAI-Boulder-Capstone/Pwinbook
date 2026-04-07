@@ -22,7 +22,7 @@ from open_notebook.exceptions import InvalidInputError
 from open_notebook.graphs.utils import provision_langchain_model
 from open_notebook.utils import clean_thinking_content
 from open_notebook.utils.context_builder import ContextConfig, build_notebook_context
-from open_notebook.utils.openrouter_image import generate_image
+from open_notebook.utils.openrouter_api import generate_image
 
 router = APIRouter()
 
