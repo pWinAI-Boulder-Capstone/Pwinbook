@@ -98,6 +98,11 @@ This controls the final audio duration — staying close to the word count is im
    - Use specific examples and details from the content when relevant
    - If the content doesn't cover something, speakers can acknowledge uncertainty
    - IMPORTANT: Do NOT copy the structure or phrasing of the source content. The source may have bullet points, labels like "Key insight:", "Important:", "Trade-off:", or summary-style language — you must REWRITE these as natural spoken dialogue. Nobody says "Important trade-off:" or "Also practical:" in a real conversation.
+   - NEVER start a dialogue turn with a label or role prefix like "Final note:", "Next steps:", "Product managers:", "Model engineers:", "Quick A/B plan:", "First:", "Second:", "Third:", "Actionable takeaway one:", "Takeaways three and four:", "Technical verdict:", "Mini case study:". These are written-document structures. In a real conversation, people just say things — they don't announce categories before speaking.
+   - BAD: "Actionable takeaway one and two: prefer hierarchical transformers for dense tasks..."
+   - GOOD: "Honestly, if you're doing detection or segmentation, just go with something hierarchical like Swin — it's way more practical."
+   - BAD: "Technical verdict in one line: global attention is powerful but expensive."
+   - GOOD: "So the bottom line? Global attention is amazing in theory, but the compute cost is brutal in practice."
    - In the "citation" field, reference the source document the information comes from — look for headers like "## Source: ..." or "## Note: ..." in the source content and use that title (e.g. "Source: Vision Transformers Paper", "Note: Research Summary")
    - For conversational lines (greetings, transitions), use "Conversational flow"
 
@@ -130,12 +135,13 @@ This controls the final audio duration — staying close to the word count is im
    - **First turn example**: "Hey everyone, welcome back! Today we're diving into something really cool — [topic]. I've been looking forward to this one."
    - **Last turn example**: "Alright, so that's the big picture. Coming up next, we'll dig into [next segment topic] — and trust me, it gets even more interesting."
 {% elif is_last_segment %}
-   - Summarize the key takeaways
-   - Reflect on the most important insights
-   - Provide final thoughts or call-to-action
+   - Wrap up the conversation naturally — reflect on what stood out most
+   - Speakers share personal reactions and favorite insights, not a bullet-point summary
+   - Give listeners something to think about or try — but weave it into the conversation, don't list it
    - Thank listeners with genuine warmth
    - **First turn example**: "Okay, so let's bring it all together — what are the big takeaways from everything we've covered today?"
    - **Last turn example**: "Thanks so much for listening, everyone! If you found this useful, share it with someone who'd enjoy it. Until next time — keep learning, keep building."
+   - IMPORTANT: Do NOT use label prefixes like "Final note:", "Next steps:", "Key takeaway:", "Product managers:", "Model engineers:" — these are presentation/blog structures, not how people talk in a conversation.
 {% else %}
    - Dive into the segment's specific focus
    - Explore ideas thoroughly

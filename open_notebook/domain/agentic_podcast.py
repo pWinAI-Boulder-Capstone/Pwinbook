@@ -82,6 +82,23 @@ class ReviewerOutput(BaseModel):
     revised_transcript: List[TranscriptLine] = Field(
         ..., description="Revised and improved transcript"
     )
+    revision_round: int = Field(
+        default=0, description="Which revision round produced this review (0 = initial)"
+    )
+
+
+class FixerOutput(BaseModel):
+    """output from the Fixer agent"""
+
+    revised_transcript: List[TranscriptLine] = Field(
+        ..., description="The corrected transcript"
+    )
+    fix_summary: str = Field(
+        ..., description="Brief description of what was changed and why"
+    )
+    revision_round: int = Field(
+        ..., description="Which revision round this fix was for (1-based)"
+    )
 
 
 class ComplianceOutput(BaseModel):
@@ -138,10 +155,16 @@ class AgenticPodcastWorkflow(ObjectModel):
     reviewer_output: Optional[Dict[str, Any]] = Field(
         default=None, description="Output from Reviewer agent (stored as dict)"
     )
+    fixer_outputs: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="Outputs from Fixer agent for each revision round"
+    )
     compliance_output: Optional[Dict[str, Any]] = Field(
         default=None, description="Output from Compliance agent (stored as dict)"
     )
 
+    revision_count: int = Field(
+        default=0, description="Number of review-fix cycles completed"
+    )
     error_message: Optional[str] = Field(
         default=None, description="Error message if workflow failed"
     )
@@ -176,6 +199,19 @@ class AgenticPodcastWorkflow(ObjectModel):
         """save reviewer output as dict"""
         self.reviewer_output = output.model_dump()
 
+    def get_fixer_outputs(self) -> List[FixerOutput]:
+        """parse fixer outputs from dicts"""
+        if self.fixer_outputs:
+            return [FixerOutput(**f) for f in self.fixer_outputs]
+        return []
+
+    def add_fixer_output(self, output: FixerOutput) -> None:
+        """append a fixer output to the list"""
+        if self.fixer_outputs is None:
+            self.fixer_outputs = []
+        self.fixer_outputs.append(output.model_dump())
+        self.revision_count = output.revision_round
+
     def get_compliance_output(self) -> Optional[ComplianceOutput]:
         """parse compliance output from dict"""
         if self.compliance_output:
@@ -189,9 +225,16 @@ class AgenticPodcastWorkflow(ObjectModel):
     def get_full_transcript(self) -> List[TranscriptLine]:
         """get the best available transcript
 
-        priority: reviewer's revised transcript > raw writer outputs
+        priority: latest fixer output > reviewer's revised transcript > raw writer outputs
         """
-        # prefer the reviewer's revised transcript if available
+        # prefer the latest fixer output if available
+        fixer_outputs = self.get_fixer_outputs()
+        if fixer_outputs:
+            latest_fix = max(fixer_outputs, key=lambda f: f.revision_round)
+            if latest_fix.revised_transcript:
+                return latest_fix.revised_transcript
+
+        # then the reviewer's revised transcript
         reviewer = self.get_reviewer_output()
         if reviewer and reviewer.revised_transcript:
             return reviewer.revised_transcript
