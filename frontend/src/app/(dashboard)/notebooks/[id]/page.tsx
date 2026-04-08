@@ -273,8 +273,8 @@ export default function NotebookPage() {
               setChatOpen={setChatOpen}
             />
           </div>
-
-          {/* Tabs for Sources / Notes */}
+        ) : (
+          /* Tabs for Sources / Notes */
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <Tabs defaultValue="sources" className="flex flex-col flex-1 min-h-0">
               <div className="flex-shrink-0 px-6 flex items-center justify-between border-b">
@@ -367,7 +367,7 @@ export default function NotebookPage() {
               </TabsContent>
             </Tabs>
           </div>
-        </div>
+        )}
 
         {/* Right panel — Chat (collapsible) */}
         <div className={cn(
