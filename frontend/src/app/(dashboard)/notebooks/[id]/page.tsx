@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { isGeneratedImageNote } from '../components/generated-image-note'
+import type { NotebookResponse, SourceListResponse, NoteResponse } from '@/lib/types/api'
 
 export type ContextMode = 'off' | 'insights' | 'full'
 
