@@ -172,7 +172,7 @@ function extractImageDataUrls(content: string): string[] {
     const payloadText = content.slice(IMAGE_GALLERY_PREFIX.length)
     const payload = JSON.parse(payloadText)
     const images = Array.isArray(payload?.images) ? payload.images : []
-    return images.filter((url): url is string => typeof url === 'string' && url.startsWith('data:image/'))
+    return images.filter((url: unknown): url is string => typeof url === 'string' && url.startsWith('data:image/'))
   } catch {
     return []
   }
