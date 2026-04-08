@@ -356,7 +356,7 @@ export default function NotebookPage() {
                   notes={regularNotes}
                   isLoading={notesLoading}
                   notebookId={notebookId}
-                  contextSelections={contextSelections}
+                  contextSelections={contextSelections.notes}
                 />
               </TabsContent>
 
