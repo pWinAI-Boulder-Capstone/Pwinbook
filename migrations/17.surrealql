@@ -1,0 +1,7 @@
+-- Migration 17: Revert speaker profiles back to openai TTS provider
+-- OpenRouter does NOT support TTS (no /audio/speech endpoint).
+-- Migration 16 incorrectly changed profiles to openrouter, causing 404 errors.
+-- TTS must use OpenAI directly with OPENAI_API_KEY.
+
+UPDATE speaker_profile SET tts_provider = "openai", tts_model = "gpt-4o-mini-tts"
+WHERE tts_provider = "openrouter" AND tts_model = "openai/gpt-audio-mini";

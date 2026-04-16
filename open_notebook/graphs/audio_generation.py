@@ -32,50 +32,13 @@ DURATION_TARGET_RANGE = {
 DEFAULT_DURATION_RANGE = (150, 900)  # 2.5-15 min fallback
 
 
-async def _create_tts(provider: str, model: str):
-    """Create a TTS instance via ModelManager (respects DB provider config).
+def _create_tts(provider: str, model: str):
+    """Create a TTS instance using the speaker profile's provider and model.
 
-    Tries multiple lookup strategies to find the model in the DB:
-    1. Exact model name (e.g. 'openai/gpt-audio-mini')
-    2. provider/model combo (e.g. 'openai' + 'gpt-4o-mini-tts' -> 'openai/gpt-4o-mini-tts')
-    3. Default TTS model from DB settings
-
-    Falls back to direct AIFactory only if all DB lookups fail.
+    Uses AIFactory directly with the provider/model from the speaker profile.
+    This is intentionally simple — the speaker profile stores the actual
+    TTS provider (e.g. 'openai') and model (e.g. 'gpt-4o-mini-tts').
     """
-    from open_notebook.domain.models import ModelManager
-
-    mgr = ModelManager()
-
-    # Try exact name, then provider/model, then default TTS
-    candidates = [model]
-    if "/" not in model and provider:
-        candidates.append(f"{provider}/{model}")
-    for candidate in candidates:
-        try:
-            tts = await mgr.get_model(candidate)
-            if tts is not None:
-                logger.debug(f"ModelManager resolved TTS '{candidate}' successfully")
-                return tts
-        except Exception as e:
-            logger.debug(f"ModelManager lookup failed for '{candidate}': {e}")
-
-    # Try the system default TTS model
-    try:
-        tts = await mgr.get_text_to_speech()
-        if tts is not None:
-            logger.info(
-                f"Using system default TTS model (speaker profile model "
-                f"'{model}' not found in DB)"
-            )
-            return tts
-    except Exception as e:
-        logger.debug(f"Default TTS lookup also failed: {e}")
-
-    # Last resort: direct AIFactory (will likely fail without proper API key)
-    logger.warning(
-        f"No DB model found for TTS '{model}' — using AIFactory directly "
-        f"with provider='{provider}'. This may fail if API keys aren't set."
-    )
     from esperanto import AIFactory
     return AIFactory.create_text_to_speech(provider, model)
 
@@ -129,7 +92,7 @@ async def generate_single_clip(
     last_error: Optional[Exception] = None
     for attempt in range(1, TTS_MAX_RETRIES + 1):
         try:
-            tts = await _create_tts(tts_provider, tts_model)
+            tts = _create_tts(tts_provider, tts_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.debug(f"Generated clip {filename} for {speaker} (attempt {attempt})")
             return clip_path
@@ -152,7 +115,7 @@ async def generate_single_clip(
             f"Falling back to {fb_provider}/{fb_model}"
         )
         try:
-            tts = await _create_tts(fb_provider, fb_model)
+            tts = _create_tts(fb_provider, fb_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.info(
                 f"FALLBACK TTS succeeded for clip {index} "

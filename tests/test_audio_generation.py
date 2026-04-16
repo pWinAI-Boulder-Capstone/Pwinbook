@@ -77,17 +77,6 @@ COMMON_KWARGS = dict(
 )
 
 
-@pytest.fixture(autouse=True)
-def _bypass_model_manager():
-    """Bypass ModelManager DB lookup so tests fall through to AIFactory."""
-    mock_mgr = MagicMock()
-    mock_mgr.return_value.get_model = AsyncMock(
-        side_effect=ValueError("test — no DB")
-    )
-    with patch("open_notebook.domain.models.ModelManager", mock_mgr):
-        yield
-
-
 # ════════════════════════════════════════════════════════════════════
 #  TEST 1 — HAPPY PATH: TTS succeeds on first attempt
 # ════════════════════════════════════════════════════════════════════
