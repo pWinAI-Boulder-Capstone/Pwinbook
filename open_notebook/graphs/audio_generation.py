@@ -32,6 +32,18 @@ DURATION_TARGET_RANGE = {
 DEFAULT_DURATION_RANGE = (150, 900)  # 2.5-15 min fallback
 
 
+def _create_tts(factory, provider: str, model: str):
+    """Create a TTS instance, handling OpenRouter as openai-compatible."""
+    if provider and provider.lower() == "openrouter":
+        return factory.create_text_to_speech(
+            provider="openai-compatible",
+            model_name=model,
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        )
+    return factory.create_text_to_speech(provider, model)
+
+
 async def generate_single_clip(
     text: str,
     speaker: str,
@@ -83,7 +95,7 @@ async def generate_single_clip(
     last_error: Optional[Exception] = None
     for attempt in range(1, TTS_MAX_RETRIES + 1):
         try:
-            tts = AIFactory.create_text_to_speech(tts_provider, tts_model)
+            tts = _create_tts(AIFactory, tts_provider, tts_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.debug(f"Generated clip {filename} for {speaker} (attempt {attempt})")
             return clip_path
@@ -106,7 +118,7 @@ async def generate_single_clip(
             f"Falling back to {fb_provider}/{fb_model}"
         )
         try:
-            tts = AIFactory.create_text_to_speech(fb_provider, fb_model)
+            tts = _create_tts(AIFactory, fb_provider, fb_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.info(
                 f"FALLBACK TTS succeeded for clip {index} "
