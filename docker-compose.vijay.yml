@@ -22,6 +22,7 @@ services:
       - '8502:8502'
       - '5055:5055'
     environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       SURREAL_ADDRESS: ${SURREAL_ADDRESS}
       SURREAL_PORT: ${SURREAL_PORT}
