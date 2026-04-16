@@ -1,0 +1,4 @@
+-- Rollback migration 16: Revert speaker profiles to original TTS model
+
+UPDATE speaker_profile SET tts_provider = "openai", tts_model = "gpt-4o-mini-tts"
+WHERE tts_model = "openai/gpt-audio-mini" AND tts_provider = "openrouter";

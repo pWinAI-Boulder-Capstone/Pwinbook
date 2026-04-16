@@ -1,0 +1,8 @@
+-- Migration 16: Update speaker profiles to use system default TTS model
+-- The original profiles were created with hardcoded 'openai/gpt-4o-mini-tts'
+-- but the actual configured TTS model may differ (e.g. openrouter/gpt-audio-mini).
+-- This updates all profiles to use 'openai/gpt-audio-mini' via openrouter,
+-- matching the system's configured TTS model.
+
+UPDATE speaker_profile SET tts_provider = "openrouter", tts_model = "openai/gpt-audio-mini"
+WHERE tts_model = "gpt-4o-mini-tts";

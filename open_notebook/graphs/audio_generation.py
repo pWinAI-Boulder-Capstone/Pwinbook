@@ -35,19 +35,47 @@ DEFAULT_DURATION_RANGE = (150, 900)  # 2.5-15 min fallback
 async def _create_tts(provider: str, model: str):
     """Create a TTS instance via ModelManager (respects DB provider config).
 
-    Falls back to direct AIFactory if the model isn't found in the DB.
+    Tries multiple lookup strategies to find the model in the DB:
+    1. Exact model name (e.g. 'openai/gpt-audio-mini')
+    2. provider/model combo (e.g. 'openai' + 'gpt-4o-mini-tts' -> 'openai/gpt-4o-mini-tts')
+    3. Default TTS model from DB settings
+
+    Falls back to direct AIFactory only if all DB lookups fail.
     """
     from open_notebook.domain.models import ModelManager
 
     mgr = ModelManager()
+
+    # Try exact name, then provider/model, then default TTS
+    candidates = [model]
+    if "/" not in model and provider:
+        candidates.append(f"{provider}/{model}")
+    for candidate in candidates:
+        try:
+            tts = await mgr.get_model(candidate)
+            if tts is not None:
+                logger.debug(f"ModelManager resolved TTS '{candidate}' successfully")
+                return tts
+        except Exception as e:
+            logger.debug(f"ModelManager lookup failed for '{candidate}': {e}")
+
+    # Try the system default TTS model
     try:
-        tts = await mgr.get_model(model)
+        tts = await mgr.get_text_to_speech()
         if tts is not None:
+            logger.info(
+                f"Using system default TTS model (speaker profile model "
+                f"'{model}' not found in DB)"
+            )
             return tts
     except Exception as e:
-        logger.debug(f"ModelManager lookup failed for '{model}', falling back to direct: {e}")
+        logger.debug(f"Default TTS lookup also failed: {e}")
 
-    # Fallback: use AIFactory directly (handles non-DB models)
+    # Last resort: direct AIFactory (will likely fail without proper API key)
+    logger.warning(
+        f"No DB model found for TTS '{model}' — using AIFactory directly "
+        f"with provider='{provider}'. This may fail if API keys aren't set."
+    )
     from esperanto import AIFactory
     return AIFactory.create_text_to_speech(provider, model)
 
