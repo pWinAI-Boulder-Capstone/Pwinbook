@@ -1,0 +1,11 @@
+-- Migration 15: Define sub-fields for flashcard_session.user_answers
+-- SurrealDB v2 SCHEMAFULL tables strip unrecognized fields from nested objects.
+-- The user_answers field was defined as array<object> without sub-field definitions,
+-- causing all answer data (card_id, correct, etc.) to be silently dropped.
+
+DEFINE FIELD IF NOT EXISTS user_answers.*.card_id ON TABLE flashcard_session TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS user_answers.*.user_answer ON TABLE flashcard_session TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS user_answers.*.correct ON TABLE flashcard_session TYPE option<bool>;
+DEFINE FIELD IF NOT EXISTS user_answers.*.quality ON TABLE flashcard_session TYPE option<int>;
+DEFINE FIELD IF NOT EXISTS user_answers.*.time_spent ON TABLE flashcard_session TYPE option<float>;
+DEFINE FIELD IF NOT EXISTS user_answers.*.timestamp ON TABLE flashcard_session TYPE option<string>;

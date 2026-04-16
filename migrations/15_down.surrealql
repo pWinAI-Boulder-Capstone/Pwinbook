@@ -1,0 +1,8 @@
+-- Rollback migration 15: Remove sub-field definitions for user_answers
+
+REMOVE FIELD IF EXISTS user_answers.*.card_id ON TABLE flashcard_session;
+REMOVE FIELD IF EXISTS user_answers.*.user_answer ON TABLE flashcard_session;
+REMOVE FIELD IF EXISTS user_answers.*.correct ON TABLE flashcard_session;
+REMOVE FIELD IF EXISTS user_answers.*.quality ON TABLE flashcard_session;
+REMOVE FIELD IF EXISTS user_answers.*.time_spent ON TABLE flashcard_session;
+REMOVE FIELD IF EXISTS user_answers.*.timestamp ON TABLE flashcard_session;
