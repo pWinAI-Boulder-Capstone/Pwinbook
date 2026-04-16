@@ -32,16 +32,24 @@ DURATION_TARGET_RANGE = {
 DEFAULT_DURATION_RANGE = (150, 900)  # 2.5-15 min fallback
 
 
-def _create_tts(factory, provider: str, model: str):
-    """Create a TTS instance, handling OpenRouter as openai-compatible."""
-    if provider and provider.lower() == "openrouter":
-        return factory.create_text_to_speech(
-            provider="openai-compatible",
-            model_name=model,
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-        )
-    return factory.create_text_to_speech(provider, model)
+async def _create_tts(provider: str, model: str):
+    """Create a TTS instance via ModelManager (respects DB provider config).
+
+    Falls back to direct AIFactory if the model isn't found in the DB.
+    """
+    from open_notebook.domain.models import ModelManager
+
+    mgr = ModelManager()
+    try:
+        tts = await mgr.get_model(model)
+        if tts is not None:
+            return tts
+    except Exception as e:
+        logger.debug(f"ModelManager lookup failed for '{model}', falling back to direct: {e}")
+
+    # Fallback: use AIFactory directly (handles non-DB models)
+    from esperanto import AIFactory
+    return AIFactory.create_text_to_speech(provider, model)
 
 
 async def generate_single_clip(
@@ -78,8 +86,6 @@ async def generate_single_clip(
     Raises:
         RuntimeError: If all TTS attempts (including fallback) fail
     """
-    from esperanto import AIFactory
-
     voice_id = voice_mapping.get(speaker)
     if not voice_id:
         logger.warning(
@@ -95,7 +101,7 @@ async def generate_single_clip(
     last_error: Optional[Exception] = None
     for attempt in range(1, TTS_MAX_RETRIES + 1):
         try:
-            tts = _create_tts(AIFactory, tts_provider, tts_model)
+            tts = await _create_tts(tts_provider, tts_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.debug(f"Generated clip {filename} for {speaker} (attempt {attempt})")
             return clip_path
@@ -118,7 +124,7 @@ async def generate_single_clip(
             f"Falling back to {fb_provider}/{fb_model}"
         )
         try:
-            tts = _create_tts(AIFactory, fb_provider, fb_model)
+            tts = await _create_tts(fb_provider, fb_model)
             await tts.agenerate_speech(text=text, voice=voice_id, output_file=clip_path)
             logger.info(
                 f"FALLBACK TTS succeeded for clip {index} "
