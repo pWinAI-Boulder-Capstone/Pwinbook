@@ -257,7 +257,7 @@ open-notebook/
                  ▼
          ┌───────────────┐
          │   SurrealDB   │  ← Database (internal, auto-configured)
-         │   (Port 8000) │
+         │   (Port 8001) │
          └───────────────┘
 ```
 

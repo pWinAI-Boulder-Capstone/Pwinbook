@@ -95,7 +95,7 @@ body:
 
         **⚠️ IMPORTANT: REDACT ALL API KEYS AND PASSWORDS!**
       placeholder: |
-        SURREAL_URL=ws://surrealdb:8000/rpc
+        SURREAL_URL=ws://surrealdb:8001/rpc
         SURREAL_USER=root
         SURREAL_PASSWORD=***REDACTED***
         OPENAI_API_KEY=sk-***REDACTED***
